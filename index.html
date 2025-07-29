@@ -6,6 +6,7 @@
     <title>Azure DevOps User Story Visualizer</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
         body {
@@ -13,6 +14,13 @@
             background-color: #343434;
             color: #f0f0f0;
         }
+        
+        /* Ensure the app container has proper dimensions for screengrab */
+        #app {
+            min-height: 100vh;
+            position: relative;
+        }
+        
         .user-story-card {
             position: absolute;
             cursor: grab;
@@ -48,10 +56,21 @@
             75% { transform: translate(2px, -2px); }
             100% { transform: translate(-2px, -2px); }
         }
+        
+        /* Ensure SVG elements are properly rendered in screenshots */
+        svg {
+            pointer-events: none;
+        }
+        
+        /* Improve text rendering in screenshots */
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
     </style>
 </head>
 <body>
-    <div id="app" class="relative w-full h-screen p-8 overflow-auto" :style="{ transform: 'scale(' + (zoomLevel / 100) + ')', transformOrigin: '0 0' }">
+    <div id="app" class="relative w-full p-8 overflow-auto" :style="{ transform: 'scale(' + (zoomLevel / 100) + ')', transformOrigin: '0 0', minHeight: calculateMinHeight() + 'px' }">
         <!-- Black background for top header section -->
         <div class="absolute top-0 left-0 right-0 z-0" style="background-color: #000000; height: 250px; border-bottom: 8px solid #D3D3D3;"></div>
         
@@ -109,11 +128,15 @@
         <div v-if="stories.length > 0" :style="{ top: topDividerY + 'px' }" class="absolute left-0 right-0 h-1 my-8" style="background-color: #343434;"></div>
 
         <!-- Zoom functionality (moved to center-right position) -->
-        <div class="absolute top-4 right-96 z-10 flex items-center space-x-2 bg-black p-3 rounded-lg shadow-lg">
-            <span class="text-white text-sm">Zoom: {{ zoomLevel }}%</span>
-            <button @click="zoomOut" class="bg-black hover:bg-gray-800 text-white font-bold py-1 px-3 rounded border border-white">-</button>
-            <input type="range" min="0" max="200" v-model.number="zoomLevel" @input="applyZoom" class="w-32">
-            <button @click="zoomIn" class="bg-black hover:bg-gray-800 text-white font-bold py-1 px-3 rounded border border-white">+</button>
+        <div class="absolute top-4 right-96 z-10 flex flex-col items-center space-y-2 bg-black p-3 rounded-lg shadow-lg">
+            <div class="flex items-center space-x-2">
+                <span class="text-white text-sm">Zoom: {{ zoomLevel }}%</span>
+                <button @click="zoomOut" class="bg-black hover:bg-gray-800 text-white font-bold py-1 px-3 rounded border border-white">-</button>
+                <input type="range" min="0" max="200" v-model.number="zoomLevel" @input="applyZoom" class="w-32">
+                <button @click="zoomIn" class="bg-black hover:bg-gray-800 text-white font-bold py-1 px-3 rounded border border-white">+</button>
+            </div>
+            <!-- Screengrab Button -->
+            <button @click="takeScreengrab" class="bg-black hover:bg-gray-800 text-white font-bold py-2 px-4 rounded border border-white w-full">Screengrab</button>
         </div>
 
         <svg class="absolute top-0 left-0 w-full h-full" style="z-index: 0;">
@@ -591,6 +614,100 @@
                     } catch (error) {
                         console.error('Error loading initial data:', error);
                         console.warn(`Could not load stories/extract.csv: ${error.message}`);
+                    }
+                },
+                calculateMinHeight() {
+                    // Calculate minimum height needed to show all content
+                    let minHeight = window.innerHeight; // Start with viewport height
+                    
+                    if (this.stories.length > 0) {
+                        // Find the bottom-most story position
+                        const bottomMostY = Math.max(...this.stories.map(story => 
+                            story.y ? story.y + 256 : 0 // 256 is card height
+                        ));
+                        
+                        // Add some padding to the bottom
+                        minHeight = Math.max(minHeight, bottomMostY + 100);
+                    }
+                    
+                    return minHeight;
+                },
+                async takeScreengrab() {
+                    try {
+                        // Get the main app element instead of document.body
+                        const appElement = document.getElementById('app');
+                        
+                        // Store the current zoom level and temporarily reset it for screenshot
+                        const currentZoom = this.zoomLevel;
+                        const originalTransform = appElement.style.transform;
+                        
+                        // Temporarily disable animations and transitions for a cleaner screenshot
+                        const originalAnimations = [];
+                        const animatedElements = document.querySelectorAll('.user-story-card');
+                        animatedElements.forEach(el => {
+                            originalAnimations.push(el.style.animation);
+                            el.style.animation = 'none';
+                        });
+                        
+                        // Temporarily remove zoom transform
+                        appElement.style.transform = 'scale(1)';
+                        
+                        // Store current scroll position
+                        const scrollX = window.scrollX;
+                        const scrollY = window.scrollY;
+                        
+                        // Scroll to top-left to ensure we capture from the beginning
+                        window.scrollTo(0, 0);
+                        
+                        // Wait a bit for transforms and scroll to complete
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                        
+                        // Configure html2canvas options for better capture
+                        const canvas = await html2canvas(appElement, {
+                            backgroundColor: '#343434',
+                            useCORS: true,
+                            allowTaint: true,
+                            scale: 1, // Use scale 1 to avoid zoom interference
+                            scrollX: 0,
+                            scrollY: 0,
+                            width: appElement.scrollWidth, // Capture full width including scrollable content
+                            height: appElement.scrollHeight, // Capture full height including scrollable content
+                            windowWidth: Math.max(appElement.scrollWidth, window.innerWidth),
+                            windowHeight: Math.max(appElement.scrollHeight, window.innerHeight),
+                            x: 0,
+                            y: 0,
+                            logging: false, // Disable logging for cleaner console
+                            ignoreElements: (element) => {
+                                // Ignore any elements that might cause issues
+                                return element.tagName === 'IFRAME' || element.tagName === 'VIDEO';
+                            }
+                        });
+                        
+                        // Restore original transform and animations
+                        appElement.style.transform = originalTransform;
+                        animatedElements.forEach((el, index) => {
+                            el.style.animation = originalAnimations[index];
+                        });
+                        
+                        // Restore scroll position
+                        window.scrollTo(scrollX, scrollY);
+                        
+                        // Convert to JPEG with higher quality
+                        const imageData = canvas.toDataURL('image/jpeg', 0.95);
+
+                        const link = document.createElement('a');
+                        const now = new Date();
+                        const filename = `user_story_visualizer_${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}.jpeg`;
+                        link.download = filename;
+                        link.href = imageData;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        
+                        console.log('Screengrab completed successfully');
+                    } catch (error) {
+                        console.error('Error taking screengrab:', error);
+                        this.error = 'Failed to take screengrab. Please try again.';
                     }
                 }
             }
