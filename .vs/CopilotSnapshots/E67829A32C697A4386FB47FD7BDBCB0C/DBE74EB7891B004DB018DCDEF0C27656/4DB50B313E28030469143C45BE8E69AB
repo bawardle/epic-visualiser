@@ -1,0 +1,580 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure DevOps User Story Visualizer</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #343434;
+            color: #f0f0f0;
+        }
+        .user-story-card {
+            position: absolute;
+            cursor: grab;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .user-story-card:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+            z-index: 100;
+        }
+
+        @keyframes border-pulse {
+            0% {
+                box-shadow: 0 0 0 0 currentColor;
+            }
+            50% {
+                box-shadow: 0 0 0 11px rgba(0, 0, 0, 0.2);
+            }
+            100% {
+                box-shadow: 0 0 0 0 currentColor;
+            }
+        }
+
+        .user-story-card {
+            animation: border-pulse 2s infinite, wobble 4.375s infinite alternate;
+        }
+
+        @keyframes wobble {
+            0% { transform: translate(0px, 0px); }
+            25% { transform: translate(2px, 2px); }
+            50% { transform: translate(-2px, 2px); }
+            75% { transform: translate(2px, -2px); }
+            100% { transform: translate(-2px, -2px); }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="relative w-full h-screen p-8 overflow-auto" :style="{ transform: 'scale(' + (zoomLevel / 100) + ')', transformOrigin: '0 0' }">
+        <!-- Black background for top header section -->
+        <div class="absolute top-0 left-0 right-0 z-0" style="background-color: #000000; height: 250px; border-bottom: 8px solid #D3D3D3;"></div>
+        
+        <div class="absolute top-4 left-4 z-10">
+            <h1 class="text-3xl font-bold text-white">User Story Relationship Visualiser</h1>
+            <p class="text-gray-400">Enter a comma-separated list of User Story IDs and click "Visualise Stories".</p>
+            <div class="mt-4">
+                <textarea v-model="userStoryIds" class="bg-gray-800 text-white border border-gray-600 rounded-md p-2 w-96 h-24" placeholder="e.g., 4498198, 4489734, 4476685"></textarea>
+            </div>
+            <p v-if="loading" class="text-yellow-400 mt-2">Loading...</p>
+            <p v-if="error" class="text-red-500 mt-2">{{ error }}</p>
+        </div>
+
+        <!-- Fixed Position Visualise Stories Button -->
+        <div class="absolute z-10" style="top: 96px; left: 520px;">
+            <button @click="fetchStories" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Visualise Stories</button>
+        </div>
+
+        <!-- Reset Position Button -->
+        <div class="absolute z-10" style="top: 141px; left: 520px;">
+            <button @click="resetPositions" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-colors duration-200">
+                Reset Positions
+            </button>
+        </div>
+
+        <!-- Clear Button -->
+        <div class="absolute z-10" style="top: 186px; left: 520px;">
+            <button @click="clearStories" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-colors duration-200">
+                Clear
+            </button>
+        </div>
+
+        <!-- Key Section (moved to far right position) -->
+        <div class="absolute top-4 right-4 z-10 bg-black px-4 py-4 rounded-lg shadow-lg">
+            <h3 class="text-white text-base font-semibold mb-3">Key</h3>
+            <div class="flex flex-col space-y-2">
+                <div class="flex items-center space-x-3">
+                    <div class="w-5 h-5 rounded-full bg-gradient-to-br from-red-100 to-red-300 border border-red-500"></div>
+                    <span class="text-white text-sm">Red circles are Precursor Stories</span>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div class="w-5 h-5 rounded-full bg-gradient-to-br from-blue-100 to-blue-300 border border-blue-500"></div>
+                    <span class="text-white text-sm">Blue circles are Successor Stories</span>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div class="w-5 h-5 rounded-full bg-gradient-to-br from-green-100 to-green-300 border border-green-500"></div>
+                    <span class="text-white text-sm">Green circles are Standalone Stories</span>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div class="w-5 h-5 rounded-full bg-gradient-to-br from-purple-100 to-purple-300 border border-purple-500"></div>
+                    <span class="text-white text-sm">Purple circles are Chain Stories</span>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="stories.length > 0" :style="{ top: topDividerY + 'px' }" class="absolute left-0 right-0 h-1 my-8" style="background-color: #343434;"></div>
+
+        <!-- Zoom functionality (moved to center-right position) -->
+        <div class="absolute top-4 right-96 z-10 flex items-center space-x-2 bg-gray-800 p-3 rounded-lg shadow-lg">
+            <span class="text-white text-sm">Zoom: {{ zoomLevel }}%</span>
+            <button @click="zoomOut" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-1 px-3 rounded">-</button>
+            <input type="range" min="0" max="200" v-model.number="zoomLevel" @input="applyZoom" class="w-32">
+            <button @click="zoomIn" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-1 px-3 rounded">+</button>
+        </div>
+
+        <svg class="absolute top-0 left-0 w-full h-full" style="z-index: 0;">
+            <defs>
+                <marker id="arrow" viewBox="0 0 20 20" refX="10" refY="10"
+                    markerWidth="12" markerHeight="12"
+                    orient="auto-start-reverse">
+                  <circle cx="10" cy="10" r="6" fill="#fff" />
+                </marker>
+                <marker id="triangle" viewBox="0 0 20 20" refX="4" refY="10"
+                    markerWidth="12" markerHeight="12"
+                    orient="auto">
+                  <polygon points="4,4 16,10 4,16" fill="#fff" />
+                </marker>
+            </defs>
+            <line v-for="line in lines"
+                :x1="line.x1" :y1="line.y1"
+                :x2="line.x2" :y2="line.y2"
+                stroke="#ffffff" stroke-width="3"
+                marker-start="url(#triangle)"
+                marker-end="url(#arrow)"
+                />
+        </svg>
+
+        <user-story-card
+            v-for="(story, index) in stories"
+            :key="story.Id"
+            :story="story"
+            :zoom-level="zoomLevel"
+            :style="{ top: story.y + 'px', left: story.x + 'px' }"
+            @mousedown="startDrag($event, story)"
+        ></user-story-card>
+
+        <div v-if="standaloneStories.length > 0" :style="{ top: dividerY + 'px' }" class="absolute left-0 right-0 h-1 my-8" style="background-color: #343434;"></div>
+    </div>
+
+    <script type="text/x-template" id="user-story-card-template">
+        <div class="user-story-card w-64 h-64 p-4 rounded-full border-2 flex flex-col items-center justify-center text-center" :class="cardClasses" :style="{ transform: 'scale(' + (zoomLevel / 100) + ')', borderWidth: '9px', animationDelay: story.wobbleDelay + 's' }">
+            <div class="font-bold text-lg mb-2" style="pointer-events: none;">{{ story.Id }}</div>
+            <p class="text-sm mb-2 h-12 overflow-hidden" style="pointer-events: none;"><strong>Name:</strong> {{ story.Name.substring(0, 30) }}...</p>
+            <div class="text-xs" style="pointer-events: none;">
+                <p><strong class="font-semibold">State:</strong> {{ story.State || 'N/A' }}</p>
+                <p class="h-8 overflow-hidden"><strong class="font-semibold">Iteration:</strong> {{ story.Iteration ? story.Iteration.slice(-15) : 'N/A' }}</p>
+            </div>
+        </div>
+    </script>
+
+    <script>
+        const UserStoryCard = {
+            template: '#user-story-card-template',
+            props: ['story', 'zoomLevel'],
+            computed: {
+                cardClasses() {
+                    // Check if this story has multiple successors
+                    const hasMultipleSuccessors = this.checkMultipleSuccessors();
+                    
+                    // Is a precursor to another story (and not a successor)
+                    if (this.story.Successor && !this.story.Precursor) {
+                        return hasMultipleSuccessors ? 
+                            'bg-gradient-to-br from-red-200 to-orange-400 border-red-600 text-black' :
+                            'bg-gradient-to-br from-red-100 to-red-300 border-red-500 text-black';
+                    } 
+                    // Is a successor to another story (and not a precursor)
+                    else if (this.story.Precursor && !this.story.Successor) {
+                        return 'bg-gradient-to-br from-blue-100 to-blue-300 border-blue-500 text-black';
+                    }
+                    // Is both a precursor and a successor (a link in a chain)
+                    else if (this.story.Precursor && this.story.Successor) {
+                        return hasMultipleSuccessors ? 
+                            'bg-gradient-to-br from-purple-200 to-indigo-400 border-purple-600 text-black' :
+                            'bg-gradient-to-br from-purple-100 to-purple-300 border-purple-500 text-black';
+                    }
+                    // Standalone story
+                    else {
+                        return 'bg-gradient-to-br from-green-100 to-green-300 border-green-500 text-black';
+                    }
+                }
+            },
+            methods: {
+                checkMultipleSuccessors() {
+                    // Access the parent component's stories data to check for multiple successors
+                    const allStories = this.$parent.stories || [];
+                    
+                    // Count direct successor
+                    let successorCount = this.story.Successor ? 1 : 0;
+                    
+                    // Count additional successors (stories that have this story as precursor)
+                    const additionalSuccessors = allStories.filter(s => s.Precursor === this.story.Id);
+                    successorCount += additionalSuccessors.length;
+                    
+                    return successorCount >= 2;
+                }
+            }
+        };
+
+        const app = Vue.createApp({
+            components: {
+                UserStoryCard
+            },
+            data() {
+                return {
+                    stories: [],
+                    lines: [],
+                    draggedStory: null,
+                    offsetX: 0,
+                    offsetY: 0,
+                    userStoryIds: '',
+                    loading: false,
+                    error: null,
+                    zoomLevel: 100, // Initial zoom level
+                    dividerY: 0, // Position of the divider
+                    topDividerY: 0, // Position of the top divider
+                    standaloneStories: [], // Moved to data
+                    treeStories: [], // Moved to data
+                    originalPositions: new Map() // Store original positions for reset functionality
+                };
+            },
+            async mounted() {
+                await this.loadInitialData();
+            },
+            methods: {
+                zoomIn() {
+                    this.zoomLevel = Math.min(200, this.zoomLevel + 10);
+                    this.applyZoom();
+                },
+                zoomOut() {
+                    this.zoomLevel = Math.max(0, this.zoomLevel - 10);
+                    this.applyZoom();
+                },
+                applyZoom() {
+                    // Re-layout stories with new zoom level
+                    this.layoutStories();
+                },
+                async fetchStories() {
+                    if (!this.userStoryIds) return;
+
+                    this.loading = true;
+                    this.error = null;
+
+                    try {
+                        const ids = this.userStoryIds.split(',').map(id => id.trim());
+                        const response = await fetch('http://localhost:3000/api/userstories', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ ids })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+                        this.stories = data.user_stories.filter(story => story != null).map(story => ({...story, x: null, y: null}));
+                        this.layoutStories();
+                    } catch (error) {
+                        this.error = 'Failed to fetch user stories. Make sure the backend server is running and the IDs are correct.';
+                        console.error('Fetch error:', error);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                layoutStories() {
+                    const storiesById = new Map(this.stories.map(s => [s.Id, s]));
+                    const scale = this.zoomLevel / 100; // Scale applied to parent div
+
+                    // 1. Separate standalone stories from those in a dependency tree
+                    this.standaloneStories = [];
+                    this.treeStories = [];
+                    this.stories.forEach(story => {
+                            if (!story.Precursor && !story.Successor) {
+                                this.standaloneStories.push(story);
+                            } else {
+                                this.treeStories.push(story);
+                            }
+                            story.wobbleDelay = Math.random() * 2; // Random delay between 0 and 2 seconds
+                        });
+
+                    // Sort standalone stories by ID
+                    this.standaloneStories.sort((a, b) => parseInt(a.Id) - parseInt(b.Id));
+
+                    console.log('Debug - Total stories:', this.stories.length);
+                    console.log('Debug - Standalone stories:', this.standaloneStories.length);
+                    console.log('Debug - Tree stories:', this.treeStories.length);
+
+                    // Constants for layout calculations
+                    const COLUMNS = 5; // Changed from 4 to 5 for less scrolling with standalone stories
+                    const CARD_WIDTH = 256; // Unscaled card width (now circular)
+                    const CARD_HEIGHT = 256; // Changed to match width for circular shape
+                    const PADDING_X_STANDALONE = 70; // Horizontal space between cards
+                    const PADDING_Y_STANDALONE = 70; // Vertical space between cards
+                    const PADDING_X_TREE = 350;
+                    const PADDING_Y_TREE = 250; // Increased slightly for circular cards
+
+                    // Calculate divider positions
+                    this.topDividerY = 200; // Position of the top divider, below the input box
+
+                    // If we have tree stories, layout them in a fixed grid like standalone stories
+                    if (this.treeStories.length > 0) {
+                        // Use same grid layout approach as standalone stories for consistent spacing
+                        const TREE_COLUMNS = 6; // More columns for tree stories to show relationships better
+                        const MAX_TREE_COLUMNS = Math.floor((window.innerWidth - 200) / (CARD_WIDTH + PADDING_X_STANDALONE));
+                        const optimalTreeColumns = Math.min(TREE_COLUMNS, Math.max(1, MAX_TREE_COLUMNS));
+                        const actualTreeColumns = Math.max(1, Math.min(optimalTreeColumns, this.treeStories.length));
+                        
+                        const totalTreeWidth = (actualTreeColumns * CARD_WIDTH) + ((actualTreeColumns - 1) * PADDING_X_STANDALONE);
+                        const startXTreeGrid = Math.max(50, (window.innerWidth - totalTreeWidth) / 2);
+                        const START_Y_TREE = this.topDividerY + 68; // 10px gap below the 8px border of the top section
+
+                        console.log('Debug - Layout tree stories in grid:', {
+                            count: this.treeStories.length,
+                            actualTreeColumns,
+                            startXTreeGrid,
+                            startY: START_Y_TREE
+                        });
+
+                        // Position tree stories in a grid layout
+                        this.treeStories.forEach((story, index) => {
+                            const row = Math.floor(index / actualTreeColumns);
+                            const col = index % actualTreeColumns;
+
+                            story.x = startXTreeGrid + col * (CARD_WIDTH + PADDING_X_STANDALONE);
+                            story.y = START_Y_TREE + (row * (CARD_HEIGHT + PADDING_Y_STANDALONE));
+                            
+                            // Add wobble effect
+                            
+                            
+                            console.log(`Debug - Tree Story ${story.Id} positioned at:`, { x: story.x, y: story.y, row, col });
+                        });
+
+                        // Calculate where tree stories end (bottom of last row of stories including card height)
+                        const treeRows = Math.ceil(this.treeStories.length / actualTreeColumns);
+                        const lastRowBottomY = START_Y_TREE + ((treeRows - 1) * (CARD_HEIGHT + PADDING_Y_STANDALONE)) + CARD_HEIGHT;
+                        
+                        // Position bottom divider with exactly 50px gap to match top divider gap
+                        this.dividerY = lastRowBottomY + 50;
+                    } else {
+                        // No tree stories, position divider just below top divider
+                        this.dividerY = this.topDividerY + 50;
+                    }
+
+                    // Layout standalone stories below the divider, in a dynamic grid
+                    if (this.standaloneStories.length > 0) {
+                        const MAX_COLUMNS = Math.floor((window.innerWidth - 100) / (CARD_WIDTH + PADDING_X_STANDALONE));
+                        const optimalColumns = Math.min(COLUMNS, Math.max(1, MAX_COLUMNS));
+                        const actualColumns = Math.max(1, Math.min(optimalColumns, this.standaloneStories.length));
+                        
+                        const totalStandaloneWidth = (actualColumns * CARD_WIDTH) + ((actualColumns - 1) * PADDING_X_STANDALONE);
+                        const startXGrid = Math.max(50, (window.innerWidth - totalStandaloneWidth) / 2);
+
+                        console.log('Debug - Layout standalone stories:', {
+                            count: this.standaloneStories.length,
+                            actualColumns,
+                            startXGrid,
+                            dividerY: this.dividerY
+                        });
+
+                        this.standaloneStories.forEach((story, index) => {
+                            const row = Math.floor(index / actualColumns);
+                            const col = index % actualColumns;
+
+                            story.x = startXGrid + col * (CARD_WIDTH + PADDING_X_STANDALONE);
+                            story.y = this.dividerY + PADDING_Y_STANDALONE + (row * (CARD_HEIGHT + PADDING_Y_STANDALONE));
+                            
+                            // Add wobble effect
+                            
+                            
+                            console.log(`Debug - Story ${story.Id} positioned at:`, { x: story.x, y: story.y, row, col });
+                        });
+                    }
+                    
+                    // Update lines after layout is complete
+                    this.updateLines();
+                    
+                    // Save original positions for reset functionality
+                    this.saveOriginalPositions();
+                },
+                
+                saveOriginalPositions() {
+                    // Clear existing original positions
+                    this.originalPositions.clear();
+                    
+                    // Save the current positions as original positions
+                    this.stories.forEach(story => {
+                        if (story.x !== null && story.y !== null) {
+                            this.originalPositions.set(story.Id, {
+                                x: story.x,
+                                y: story.y
+                            });
+                        }
+                    });
+                    
+                    console.log('Original positions saved for', this.originalPositions.size, 'stories');
+                },
+                updateLines() {
+                    const storiesById = new Map(this.stories.map(s => [s.Id, s]));
+                    const CARD_WIDTH = 256; // Unscaled card width
+                    const CARD_RADIUS = 128; // Radius of circular card (256/2)
+                    const scale = this.zoomLevel / 100; // Current zoom scale factor
+
+                    this.lines = [];
+                    
+                    // Helper function to calculate the nearest points on circle edges with zoom scaling
+                    const getCircleConnectionPoints = (story1, story2) => {
+                        // Calculate center points of both circles with zoom scaling applied
+                        const scaledRadius = CARD_RADIUS * scale;
+                        const center1X = story1.x + scaledRadius;
+                        const center1Y = story1.y + scaledRadius;
+                        const center2X = story2.x + scaledRadius;
+                        const center2Y = story2.y + scaledRadius;
+                        
+                        // Calculate the angle between centers
+                        const deltaX = center2X - center1X;
+                        const deltaY = center2Y - center1Y;
+                        const angle = Math.atan2(deltaY, deltaX);
+                        
+                        // Calculate connection points on the circumference of each circle with scaling
+                        const x1 = center1X + Math.cos(angle) * scaledRadius;
+                        const y1 = center1Y + Math.sin(angle) * scaledRadius;
+                        const x2 = center2X - Math.cos(angle) * scaledRadius;
+                        const y2 = center2Y - Math.sin(angle) * scaledRadius;
+                        
+                        return { x1, y1, x2, y2 };
+                    };
+                    
+                    // Create a map of story ID to its successors for line drawing
+                    const successorsMap = new Map();
+                    this.treeStories.forEach(story => {
+                        if (story.Successor && storiesById.has(story.Successor)) {
+                            if (!successorsMap.has(story.Id)) {
+                                successorsMap.set(story.Id, []);
+                            }
+                            successorsMap.get(story.Id).push(story.Successor);
+                        }
+                    });
+
+                    // Also check for additional relationships based on precursors
+                    this.treeStories.forEach(story => {
+                        const additionalSuccessors = this.treeStories.filter(s => s.Precursor === story.Id).map(s => s.Id);
+                        if (additionalSuccessors.length > 0) {
+                            if (!successorsMap.has(story.Id)) {
+                                successorsMap.set(story.Id, []);
+                            }
+                            additionalSuccessors.forEach(successorId => {
+                                if (!successorsMap.get(story.Id).includes(successorId)) {
+                                    successorsMap.get(story.Id).push(successorId);
+                                }
+                            });
+                        }
+                    });
+
+                    // Draw lines from each story to all its successors using nearest edge points with zoom scaling
+                    successorsMap.forEach((successors, storyId) => {
+                        const story = storiesById.get(storyId);
+                        if (!story) return;
+
+                        successors.forEach(successorId => {
+                            const successor = storiesById.get(successorId);
+                            if (successor) {
+                                const connectionPoints = getCircleConnectionPoints(story, successor);
+                                this.lines.push({
+                                    x1: connectionPoints.x1,
+                                    y1: connectionPoints.y1,
+                                    x2: connectionPoints.x2,
+                                    y2: connectionPoints.y2
+                                });
+                            }
+                        });
+                    });
+                },
+                startDrag(event, story) {
+                    this.draggedStory = story;
+                    this.offsetX = event.clientX - story.x;
+                    this.offsetY = event.clientY - story.y;
+                    document.addEventListener('mousemove', this.doDrag);
+                    document.addEventListener('mouseup', this.stopDrag);
+                },
+                doDrag(event) {
+                    if (!this.draggedStory) return;
+                    this.draggedStory.x = event.clientX - this.offsetX;
+                    this.draggedStory.y = event.clientY - this.offsetY;
+                    this.updateLines();
+                },
+                stopDrag() {
+                    this.draggedStory = null;
+                    document.removeEventListener('mousemove', this.doDrag);
+                    document.removeEventListener('mouseup', this.stopDrag);
+                },
+                resetPositions() {
+                    // Reset all stories to their original positions
+                    this.stories.forEach(story => {
+                        const originalPos = this.originalPositions.get(story.Id);
+                        if (originalPos) {
+                            story.x = originalPos.x;
+                            story.y = originalPos.y;
+                        }
+                    });
+                    
+                    // Update the lines after resetting positions
+                    this.updateLines();
+                    
+                    console.log('All story positions have been reset to original locations');
+                },
+                clearStories() {
+                    this.stories = [];
+                    this.lines = [];
+                    this.userStoryIds = '';
+                    this.dividerY = 0;
+                    this.topDividerY = 0;
+                    this.loading = false;
+                    this.error = null;
+                    this.zoomLevel = 100;
+                    this.standaloneStories = [];
+                    this.treeStories = [];
+                },
+                async loadInitialData() {
+                    try {
+                        const response = await fetch('stories/extract.csv');
+                        if (!response.ok) {
+                            throw new Error(`Failed to fetch stories/extract.csv. Status: ${response.status}`);
+                        }
+                        const data = await response.text();
+                        const rows = data.split('\n').slice(1); // Skip header row
+                        const ids = rows.map(row => {
+                            // Trim the row to remove any extra whitespace
+                            const trimmedRow = row.trim();
+                            if (!trimmedRow) return null;
+                            
+                            const columns = trimmedRow.split(',');
+                            if (columns.length > 3) {
+                                // Clean the ID, removing quotes and extra whitespace
+                                const id = columns[3].trim().replace(/"/g, '');
+                                // Check if it's a valid number
+                                if (id && !isNaN(id)) {
+                                    return id;
+                                }
+                            }
+                            return null;
+                        }).filter(id => id);
+
+                        if (ids.length > 0) {
+                            this.userStoryIds = ids.join(', ');
+                            console.log('Loaded User Story IDs from CSV:', this.userStoryIds);
+                            // Don't automatically fetch stories, just populate the input box
+                        } else {
+                            console.warn('No valid User Story IDs found in stories/extract.csv.');
+                        }
+                    } catch (error) {
+                        console.error('Error loading initial data:', error);
+                        // Don't show error to user for missing CSV, just log it
+                        console.warn(`Could not load stories/extract.csv: ${error.message}`);
+                    }
+                },
+            }
+        });
+
+        app.component('user-story-card', UserStoryCard);
+
+        app.mount('#app');
+    </script>
+</body>
+</html>

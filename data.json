@@ -1,0 +1,166 @@
+{
+  "user_stories": [
+    {
+      "Id": "4498198",
+      "Name": "User Story - 4498198",
+      "Precursor": null,
+      "Successor": "4489734"
+    },
+    {
+      "Id": "4489734",
+      "Name": "User Story - 4489734",
+      "Precursor": "4498198",
+      "Successor": "4476685"
+    },
+    {
+      "Id": "4476685",
+      "Name": "User Story - 4476685",
+      "Precursor": "4489734",
+      "Successor": "4457956"
+    },
+    {
+      "Id": "4457956",
+      "Name": "User Story - 4457956",
+      "Precursor": "4476685",
+      "Successor": "4460523"
+    },
+    {
+      "Id": "4460523",
+      "Name": "User Story - 4460523",
+      "Precursor": "4457956",
+      "Successor": "4460118"
+    },
+    {
+      "Id": "4460118",
+      "Name": "User Story - 4460118",
+      "Precursor": "4460523",
+      "Successor": "4460141"
+    },
+    {
+      "Id": "4460141",
+      "Name": "User Story - 4460141",
+      "Precursor": "4460118",
+      "Successor": "4421885"
+    },
+    {
+      "Id": "4421885",
+      "Name": "User Story - 4421885",
+      "Precursor": "4460141",
+      "Successor": "4460587"
+    },
+    {
+      "Id": "4460587",
+      "Name": "User Story - 4460587",
+      "Precursor": "4421885",
+      "Successor": "4488495"
+    },
+    {
+      "Id": "4488495",
+      "Name": "User Story - 4488495",
+      "Precursor": "4460587",
+      "Successor": "4455541"
+    },
+    {
+      "Id": "4455541",
+      "Name": "User Story - 4455541",
+      "Precursor": "4488495",
+      "Successor": "4476680"
+    },
+    {
+      "Id": "4476680",
+      "Name": "User Story - 4476680",
+      "Precursor": "4455541",
+      "Successor": "4398734"
+    },
+    {
+      "Id": "4398734",
+      "Name": "User Story - 4398734",
+      "Precursor": "4476680",
+      "Successor": "4477622"
+    },
+    {
+      "Id": "4477622",
+      "Name": "User Story - 4477622",
+      "Precursor": "4398734",
+      "Successor": "4477624"
+    },
+    {
+      "Id": "4477624",
+      "Name": "User Story - 4477624",
+      "Precursor": "4477622",
+      "Successor": "4482029"
+    },
+    {
+      "Id": "4482029",
+      "Name": "User Story - 4482029",
+      "Precursor": "4477624",
+      "Successor": "4455589"
+    },
+    {
+      "Id": "4455589",
+      "Name": "User Story - 4455589",
+      "Precursor": "4482029",
+      "Successor": "4460153"
+    },
+    {
+      "Id": "4460153",
+      "Name": "User Story - 4460153",
+      "Precursor": "4455589",
+      "Successor": "4440180"
+    },
+    {
+      "Id": "4440180",
+      "Name": "User Story - 4440180",
+      "Precursor": "4460153",
+      "Successor": "4440166"
+    },
+    {
+      "Id": "4440166",
+      "Name": "User Story - 4440166",
+      "Precursor": "4440180",
+      "Successor": "4460103"
+    },
+    {
+      "Id": "4460103",
+      "Name": "User Story - 4460103",
+      "Precursor": "4440166",
+      "Successor": "4460206"
+    },
+    {
+      "Id": "4460206",
+      "Name": "User Story - 4460206",
+      "Precursor": "4460103",
+      "Successor": "4460567"
+    },
+    {
+      "Id": "4460567",
+      "Name": "User Story - 4460567",
+      "Precursor": "4460206",
+      "Successor": "4440178"
+    },
+    {
+      "Id": "4440178",
+      "Name": "User Story - 4440178",
+      "Precursor": "4460567",
+      "Successor": "4464483"
+    },
+    {
+      "Id": "4464483",
+      "Name": "User Story - 4464483",
+      "Precursor": "4440178",
+      "Successor": "4466894"
+    },
+    {
+      "Id": "4466894",
+      "Name": "User Story - 4466894",
+      "Precursor": "4464483",
+      "Successor": "4440176"
+    },
+    {
+      "Id": "4440176",
+      "Name": "User Story - 4440176",
+      "Precursor": "4466894",
+      "Successor": null
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+# .gitignore
+
+# Ignore the server directory
+# Paths in .gitignore are relative to the root of the repository.
+# Use forward slashes (/) for cross-platform compatibility.
+server/
