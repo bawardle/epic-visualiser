@@ -88,8 +88,12 @@
         </div>
 
         <!-- Fixed Position Visualise Stories Button -->
-        <div class="absolute z-10" style="top: 96px; left: 520px;">
+        <div class="absolute z-10 flex items-center" style="top: 96px; left: 520px;">
             <button @click="fetchStories" class="bg-black hover:bg-gray-800 text-white font-bold py-2 px-4 rounded border border-white">Visualise Stories</button>
+            <div class="ml-4 flex items-center">
+                <input type="checkbox" id="critical-pathways" v-model="criticalPathwaysOnly" class="form-checkbox h-5 w-5 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500">
+                <label for="critical-pathways" class="ml-2 text-white">Critical Pathways Only</label>
+            </div>
         </div>
 
         <!-- Reset Position Button -->
@@ -173,6 +177,8 @@
         <div v-if="standaloneStories.length > 0" :style="{ top: dividerY + 'px' }" class="absolute left-0 right-0 h-1 my-8" style="background-color: #343434;"></div>
     </div>
 
+    <audio id="pop-sound" src="sounds/mixkit-bubble-pop-up-alert-notification-2357.wav" preload="auto"></audio>
+
     <script type="text/x-template" id="user-story-card-template">
         <div class="user-story-card w-64 h-64 p-4 rounded-full border-2 flex flex-col items-center justify-center text-center" :class="cardClasses" :style="{ transform: 'scale(' + (zoomLevel / 100) + ')', borderWidth: '9px', animationDelay: story.wobbleDelay + 's' }">
             <div class="font-bold text-lg mb-2" style="pointer-events: none;">{{ story.Id }}</div>
@@ -190,44 +196,24 @@
             props: ['story', 'zoomLevel'],
             computed: {
                 cardClasses() {
-                    // Check if this story has multiple successors
-                    const hasMultipleSuccessors = this.checkMultipleSuccessors();
+                    const isCriticalPathway = this.story['Critical-Pathway'];
                     
-                    // Is a precursor to another story (and not a successor)
-                    if (this.story.Successor && !this.story.Precursor) {
-                        return hasMultipleSuccessors ? 
+                    if (this.story.Successor.length > 0 && this.story.Precursor.length === 0) {
+                        return isCriticalPathway ? 
                             'bg-gradient-to-br from-red-200 to-orange-400 border-red-600 text-black' :
                             'bg-gradient-to-br from-red-100 to-red-300 border-red-500 text-black';
                     } 
-                    // Is a successor to another story (and not a precursor)
-                    else if (this.story.Precursor && !this.story.Successor) {
+                    else if (this.story.Precursor.length > 0 && this.story.Successor.length === 0) {
                         return 'bg-gradient-to-br from-blue-100 to-blue-300 border-blue-500 text-black';
                     }
-                    // Is both a precursor and a successor (a link in a chain)
-                    else if (this.story.Precursor && this.story.Successor) {
-                        return hasMultipleSuccessors ? 
+                    else if (this.story.Precursor.length > 0 && this.story.Successor.length > 0) {
+                        return isCriticalPathway ? 
                             'bg-gradient-to-br from-purple-200 to-indigo-400 border-purple-600 text-black' :
                             'bg-gradient-to-br from-purple-100 to-purple-300 border-purple-500 text-black';
                     }
-                    // Standalone story
                     else {
                         return 'bg-gradient-to-br from-green-100 to-green-300 border-green-500 text-black';
                     }
-                }
-            },
-            methods: {
-                checkMultipleSuccessors() {
-                    // Access the parent component's stories data to check for multiple successors
-                    const allStories = this.$parent.stories || [];
-                    
-                    // Count direct successor
-                    let successorCount = this.story.Successor ? 1 : 0;
-                    
-                    // Count additional successors (stories that have this story as precursor)
-                    const additionalSuccessors = allStories.filter(s => s.Precursor === this.story.Id);
-                    successorCount += additionalSuccessors.length;
-                    
-                    return successorCount >= 2;
                 }
             }
         };
@@ -239,6 +225,7 @@
             data() {
                 return {
                     stories: [],
+                    allStories: [],
                     lines: [],
                     draggedStory: null,
                     offsetX: 0,
@@ -251,41 +238,47 @@
                     topDividerY: 0, // Position of the top divider
                     standaloneStories: [], // Moved to data
                     treeStories: [], // Moved to data
-                    originalPositions: new Map() // Store original positions for reset functionality
+                    originalPositions: new Map(), // Store original positions for reset functionality
+                    criticalPathwaysOnly: false
                 };
             },
+            watch: {
+                criticalPathwaysOnly(newValue) {
+                    this.filterStories();
+                }
+            },
             async mounted() {
-                    // Now, we don't automatically load stories on mount
-                },
-                methods: {
-                    handleFileUpload(event) {
-                        const file = event.target.files[0];
-                        if (!file) {
-                            return;
-                        }
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            const text = e.target.result;
-                            const rows = text.split('\n').slice(1);
-                            const ids = rows.map(row => {
-                                const columns = row.split(',');
-                                if (columns.length > 3) {
-                                    const id = columns[3].trim().replace(/\"/g, '');
-                                    if (id && !isNaN(id)) {
-                                        return id;
-                                    }
+                // Now, we don't automatically load stories on mount
+            },
+            methods: {
+                handleFileUpload(event) {
+                    const file = event.target.files[0];
+                    if (!file) {
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const text = e.target.result;
+                        const rows = text.split('\n').slice(1);
+                        const ids = rows.map(row => {
+                            const columns = row.split(',');
+                            if (columns.length > 3) {
+                                const id = columns[3].trim().replace(/"/g, '');
+                                if (id && !isNaN(id)) {
+                                    return id;
                                 }
-                                return null;
-                            }).filter(id => id);
-
-                            if (ids.length > 0) {
-                                this.userStoryIds = ids.join(', ');
-                            } else {
-                                this.error = 'No valid User Story IDs found in the selected file.';
                             }
-                        };
-                        reader.readAsText(file);
-                    },
+                            return null;
+                        }).filter(id => id);
+
+                        if (ids.length > 0) {
+                            this.userStoryIds = ids.join(', ');
+                        } else {
+                            this.error = 'No valid User Story IDs found in the selected file.';
+                        }
+                    };
+                    reader.readAsText(file);
+                },
                 zoomIn() {
                     this.zoomLevel = Math.min(200, this.zoomLevel + 10);
                     this.applyZoom();
@@ -319,14 +312,35 @@
                         }
 
                         const data = await response.json();
-                        this.stories = data.user_stories.filter(story => story != null).map(story => ({...story, x: null, y: null}));
-                        this.layoutStories();
+                        console.log('Raw data from backend:', data.user_stories);
+                        this.allStories = data.user_stories.filter(story => story != null);
+                        this.filterStories();
+                        this.playSound();
                     } catch (error) {
                         this.error = 'Failed to fetch user stories. Make sure the backend server is running and the IDs are correct.';
                         console.error('Fetch error:', error);
                     } finally {
                         this.loading = false;
                     }
+                },
+                filterStories() {
+                    console.log('Filtering stories. criticalPathwaysOnly:', this.criticalPathwaysOnly);
+                    if (this.criticalPathwaysOnly) {
+                        const criticalPathwayStories = this.allStories.filter(story => story['Critical-Pathway']);
+                        const relevantStoryIds = new Set();
+
+                        criticalPathwayStories.forEach(story => {
+                            relevantStoryIds.add(story.Id);
+                            story.Successor.forEach(sId => relevantStoryIds.add(sId));
+                            story.Precursor.forEach(pId => relevantStoryIds.add(pId));
+                        });
+
+                        this.stories = this.allStories.filter(story => relevantStoryIds.has(story.Id));
+                    } else {
+                        this.stories = this.allStories;
+                    }
+                    console.log('Filtered stories:', this.stories);
+                    this.layoutStories();
                 },
                 layoutStories() {
                     const storiesById = new Map(this.stories.map(s => [s.Id, s]));
@@ -336,13 +350,13 @@
                     this.standaloneStories = [];
                     this.treeStories = [];
                     this.stories.forEach(story => {
-                            if (!story.Precursor && !story.Successor) {
-                                this.standaloneStories.push(story);
-                            } else {
-                                this.treeStories.push(story);
-                            }
-                            story.wobbleDelay = Math.random() * 2; // Random delay between 0 and 2 seconds
-                        });
+                        if (story.Precursor.length === 0 && story.Successor.length === 0) {
+                            this.standaloneStories.push(story);
+                        } else {
+                            this.treeStories.push(story);
+                        }
+                        story.wobbleDelay = Math.random() * 2; // Random delay between 0 and 2 seconds
+                    });
 
                     // Sort standalone stories by ID
                     this.standaloneStories.sort((a, b) => parseInt(a.Id) - parseInt(b.Id));
@@ -391,7 +405,7 @@
                             story.y = START_Y_TREE + (row * (CARD_HEIGHT + PADDING_Y_STANDALONE));
                             
                             // Add wobble effect
-                            
+                            this.playSound();
                             
                             console.log(`Debug - Tree Story ${story.Id} positioned at:`, { x: story.x, y: story.y, row, col });
                         });
@@ -431,7 +445,7 @@
                             story.y = this.dividerY + PADDING_Y_STANDALONE + (row * (CARD_HEIGHT + PADDING_Y_STANDALONE));
                             
                             // Add wobble effect
-                            
+                            this.playSound();
                             
                             console.log(`Debug - Story ${story.Id} positioned at:`, { x: story.x, y: story.y, row, col });
                         });
@@ -486,31 +500,35 @@
                         const y1 = center1Y + Math.sin(angle) * scaledRadius;
                         const x2 = center2X - Math.cos(angle) * scaledRadius;
                         const y2 = center2Y - Math.sin(angle) * scaledRadius;
-                        
+                            
                         return { x1, y1, x2, y2 };
                     };
                     
                     // Create a map of story ID to its successors for line drawing
                     const successorsMap = new Map();
                     this.treeStories.forEach(story => {
-                        if (story.Successor && storiesById.has(story.Successor)) {
+                        if (story.Successor && story.Successor.length > 0) {
                             if (!successorsMap.has(story.Id)) {
                                 successorsMap.set(story.Id, []);
                             }
-                            successorsMap.get(story.Id).push(story.Successor);
+                            story.Successor.forEach(sId => {
+                                successorsMap.get(story.Id).push(sId);
+                            });
                         }
                     });
 
                     // Also check for additional relationships based on precursors
                     this.treeStories.forEach(story => {
-                        const additionalSuccessors = this.treeStories.filter(s => s.Precursor === story.Id).map(s => s.Id);
-                        if (additionalSuccessors.length > 0) {
-                            if (!successorsMap.has(story.Id)) {
-                                successorsMap.set(story.Id, []);
-                            }
-                            additionalSuccessors.forEach(successorId => {
-                                if (!successorsMap.get(story.Id).includes(successorId)) {
-                                    successorsMap.get(story.Id).push(successorId);
+                        if (story.Precursor && story.Precursor.length > 0) {
+                            story.Precursor.forEach(pId => {
+                                const precursorStory = storiesById.get(pId);
+                                if (precursorStory) {
+                                    if (!successorsMap.has(pId)) {
+                                        successorsMap.set(pId, []);
+                                    }
+                                    if (!successorsMap.get(pId).includes(story.Id)) {
+                                        successorsMap.get(pId).push(story.Id);
+                                    }
                                 }
                             });
                         }
@@ -573,6 +591,7 @@
                 },
                 clearStories() {
                     this.stories = [];
+                    this.allStories = [];
                     this.lines = [];
                     this.userStoryIds = '';
                     this.dividerY = 0;
@@ -582,6 +601,12 @@
                     this.zoomLevel = 100;
                     this.standaloneStories = [];
                     this.treeStories = [];
+                },
+                playSound() {
+                    const audio = document.getElementById('pop-sound');
+                    if (audio) {
+                        audio.play().catch(e => console.error("Error playing sound:", e));
+                    }
                 },
                 async loadInitialData() {
                     try {
@@ -597,7 +622,7 @@
                             
                             const columns = trimmedRow.split(',');
                             if (columns.length > 3) {
-                                const id = columns[3].trim().replace(/\"/g, '');
+                                const id = columns[3].trim().replace(/"/g, '');
                                 if (id && !isNaN(id)) {
                                     return id;
                                 }
