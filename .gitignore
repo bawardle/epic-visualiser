@@ -4,3 +4,5 @@
 # Paths in .gitignore are relative to the root of the repository.
 # Use forward slashes (/) for cross-platform compatibility.
 .env
+/.vs/
+/server/node_modules/
