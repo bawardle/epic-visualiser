@@ -94,6 +94,16 @@
                 <input type="checkbox" id="critical-pathways" v-model="criticalPathwaysOnly" class="form-checkbox h-5 w-5 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500">
                 <label for="critical-pathways" class="ml-2 text-white">Critical Pathways Only</label>
             </div>
+            <div class="ml-4 flex items-center">
+                <button @click="toggleMute" class="bg-black hover:bg-gray-800 text-white font-bold py-2 px-4 rounded border border-white">
+                    <svg v-if="isMuted" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.858 5.858a1 1 0 00-1.414 1.414L12 12m0 0l-1.414 1.414a1 1 0 001.414 1.414L12 12zm0 0l7.071 7.071a1 1 0 001.414-1.414L12 12z" />
+                    </svg>
+                </button>
+            </div>
         </div>
 
         <!-- Reset Position Button -->
@@ -169,7 +179,6 @@
             v-for="(story, index) in stories"
             :key="story.Id"
             :story="story"
-            :zoom-level="zoomLevel"
             :style="{ top: story.y + 'px', left: story.x + 'px' }"
             @mousedown="startDrag($event, story)"
         ></user-story-card>
@@ -180,7 +189,7 @@
     <audio id="pop-sound" src="sounds/mixkit-bubble-pop-up-alert-notification-2357.wav" preload="auto"></audio>
 
     <script type="text/x-template" id="user-story-card-template">
-        <div class="user-story-card w-64 h-64 p-4 rounded-full border-2 flex flex-col items-center justify-center text-center" :class="cardClasses" :style="{ transform: 'scale(' + (zoomLevel / 100) + ')', borderWidth: '9px', animationDelay: story.wobbleDelay + 's' }">
+        <div class="user-story-card w-64 h-64 p-4 rounded-full border-2 flex flex-col items-center justify-center text-center" :class="cardClasses" :style="{ borderWidth: '9px', animationDelay: story.wobbleDelay + 's' }">
             <div class="font-bold text-lg mb-2" style="pointer-events: none;">{{ story.Id }}</div>
             <p class="text-sm mb-2 h-12 overflow-hidden" style="pointer-events: none;"><strong>Name:</strong> {{ story.Name.substring(0, 30) }}...</p>
             <div class="text-xs" style="pointer-events: none;">
@@ -193,7 +202,7 @@
     <script>
         const UserStoryCard = {
             template: '#user-story-card-template',
-            props: ['story', 'zoomLevel'],
+            props: ['story'],
             computed: {
                 cardClasses() {
                     const isCriticalPathway = this.story['Critical-Pathway'];
@@ -239,7 +248,8 @@
                     standaloneStories: [], // Moved to data
                     treeStories: [], // Moved to data
                     originalPositions: new Map(), // Store original positions for reset functionality
-                    criticalPathwaysOnly: false
+                    criticalPathwaysOnly: false,
+                    isMuted: false
                 };
             },
             watch: {
@@ -251,6 +261,9 @@
                 // Now, we don't automatically load stories on mount
             },
             methods: {
+                toggleMute() {
+                    this.isMuted = !this.isMuted;
+                },
                 handleFileUpload(event) {
                     const file = event.target.files[0];
                     if (!file) {
@@ -281,14 +294,11 @@
                 },
                 zoomIn() {
                     this.zoomLevel = Math.min(200, this.zoomLevel + 10);
-                    this.applyZoom();
                 },
                 zoomOut() {
                     this.zoomLevel = Math.max(0, this.zoomLevel - 10);
-                    this.applyZoom();
                 },
                 applyZoom() {
-                    // Re-layout stories with new zoom level
                     this.layoutStories();
                 },
                 async fetchStories() {
@@ -344,7 +354,6 @@
                 },
                 layoutStories() {
                     const storiesById = new Map(this.stories.map(s => [s.Id, s]));
-                    const scale = this.zoomLevel / 100; // Scale applied to parent div
 
                     // 1. Separate standalone stories from those in a dependency tree
                     this.standaloneStories = [];
@@ -477,29 +486,27 @@
                 updateLines() {
                     const storiesById = new Map(this.stories.map(s => [s.Id, s]));
                     const CARD_RADIUS = 128; // Radius of circular card (256/2)
-                    const scale = this.zoomLevel / 100; // Current zoom scale factor
 
                     this.lines = [];
                     
-                    // Helper function to calculate the nearest points on circle edges with zoom scaling
+                    // Helper function to calculate the nearest points on circle edges
                     const getCircleConnectionPoints = (story1, story2) => {
-                        // Calculate center points of both circles with zoom scaling applied
-                        const scaledRadius = CARD_RADIUS * scale;
-                        const center1X = story1.x + scaledRadius;
-                        const center1Y = story1.y + scaledRadius;
-                        const center2X = story2.x + scaledRadius;
-                        const center2Y = story2.y + scaledRadius;
+                        // Calculate center points of both circles
+                        const center1X = story1.x + CARD_RADIUS;
+                        const center1Y = story1.y + CARD_RADIUS;
+                        const center2X = story2.x + CARD_RADIUS;
+                        const center2Y = story2.y + CARD_RADIUS;
                         
                         // Calculate the angle between centers
                         const deltaX = center2X - center1X;
                         const deltaY = center2Y - center1Y;
                         const angle = Math.atan2(deltaY, deltaX);
                         
-                        // Calculate connection points on the circumference of each circle with scaling
-                        const x1 = center1X + Math.cos(angle) * scaledRadius;
-                        const y1 = center1Y + Math.sin(angle) * scaledRadius;
-                        const x2 = center2X - Math.cos(angle) * scaledRadius;
-                        const y2 = center2Y - Math.sin(angle) * scaledRadius;
+                        // Calculate connection points on the circumference of each circle
+                        const x1 = center1X + Math.cos(angle) * CARD_RADIUS;
+                        const y1 = center1Y + Math.sin(angle) * CARD_RADIUS;
+                        const x2 = center2X - Math.cos(angle) * CARD_RADIUS;
+                        const y2 = center2Y - Math.sin(angle) * CARD_RADIUS;
                             
                         return { x1, y1, x2, y2 };
                     };
@@ -534,7 +541,7 @@
                         }
                     });
 
-                    // Draw lines from each story to all its successors using nearest edge points with zoom scaling
+                    // Draw lines from each story to all its successors using nearest edge points
                     successorsMap.forEach((successors, storyId) => {
                         const story = storiesById.get(storyId);
                         if (!story) return;
@@ -603,6 +610,7 @@
                     this.treeStories = [];
                 },
                 playSound() {
+                    if (this.isMuted) return;
                     const audio = document.getElementById('pop-sound');
                     if (audio) {
                         audio.play().catch(e => console.error("Error playing sound:", e));
