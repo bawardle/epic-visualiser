@@ -3,52 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Azure DevOps User Story Visualizer</title>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <title>Epic Estimation Visualiser</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #343434;
-            color: #f0f0f0;
-        }
-        
-        /* Ensure the app container has proper dimensions for screengrab */
-        #app {
-            min-height: 100vh;
-            position: relative;
-        }
-        
-        .user-story-card {
-            position: absolute;
-            cursor: grab;
-            transition: all 0.3s ease;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-        .user-story-card:active {
-            cursor: grabbing;
-            transform: scale(1.05);
-            z-index: 100;
-        }
-
+        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #343434, #4B0082); color: #f0f0f0; }
+        #app { position: relative; width: 100%; min-height: 100vh; overflow: auto; }
+                .work-item-card { position: absolute; cursor: grab; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); border-radius: 9999px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: black; animation: border-pulse 2s infinite, wobble 4.375s infinite alternate; }
+        .work-item-card.default-glow { animation: border-pulse 2s infinite, wobble 4.375s infinite alternate; }
+        .work-item-card.active-glow { animation: blue-pulse 2s infinite, wobble 4.375s infinite alternate; }
+        .work-item-card.closed-glow { animation: green-pulse 2s infinite, wobble 4.375s infinite alternate; }
+        .epic-card { width: 300px; height: 300px; background-color: #ffedd5; border: 12px solid #fb923c; }
+        .feature-card { width: 200px; height: 200px; background-color: #e9d5ff; border: 8px solid #a855f7; }
         @keyframes border-pulse {
-            0% {
-                box-shadow: 0 0 0 0 currentColor;
-            }
-            50% {
-                box-shadow: 0 0 0 11px rgba(0, 0, 0, 0.2);
-            }
-            100% {
-                box-shadow: 0 0 0 0 currentColor;
-            }
+            0% { box-shadow: 0 0 0 0 currentColor; }
+            50% { box-shadow: 0 0 0 11px rgba(0, 0, 0, 0.2); }
+            100% { box-shadow: 0 0 0 0 currentColor; }
         }
-
-        .user-story-card {
-            animation: border-pulse 2s infinite, wobble 4.375s infinite alternate;
+        @keyframes blue-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
         }
-
+        @keyframes green-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(74, 222, 128, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+        }
         @keyframes wobble {
             0% { transform: translate(0px, 0px); }
             25% { transform: translate(2px, 2px); }
@@ -56,699 +35,288 @@
             75% { transform: translate(2px, -2px); }
             100% { transform: translate(-2px, -2px); }
         }
-        
-        /* Ensure SVG elements are properly rendered in screenshots */
-        svg {
-            pointer-events: none;
-        }
-        
-        /* Improve text rendering in screenshots */
-        * {
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
     </style>
 </head>
 <body>
-    <div id="app" class="relative w-full p-8 overflow-auto" :style="{ transform: 'scale(' + (zoomLevel / 100) + ')', transformOrigin: '0 0', minHeight: calculateMinHeight() + 'px' }">
-        <!-- Black background for top header section -->
-        <div class="absolute top-0 left-0 right-0 z-0" style="background-color: #000000; height: 250px; border-bottom: 8px solid #D3D3D3;"></div>
-        
-        <div class="absolute top-4 left-4 z-10">
-            <h1 class="text-3xl font-bold text-white">User Story Relationship Visualiser</h1>
-            <p class="text-gray-400">Enter a comma-separated list of User Story IDs and click "Visualise Stories".</p>
-            <div class="mt-4">
-                <textarea v-model="userStoryIds" class="bg-gray-800 text-white border border-gray-600 rounded-md p-2 w-96 h-24" placeholder="e.g., 4498198, 4489734, 4476685"></textarea>
+    <div id="app">
+        <div style="position: absolute; top: 0; left: 0; right: 0; background-color: #16131D; height: 200px; border-bottom: 8px solid #D3D3D3; z-index: 0;"></div>
+        <div style="position: absolute; top: 1rem; left: 1rem; z-index: 10;">
+            <h1 style="font-size: 1.875rem; font-weight: bold; color: white;">Epic Estimation Visualiser</h1>
+            <p style="color: #9ca3af;">Enter an Epic ID to visualise the hierarchy.</p>
+            <div style="margin-top: 1rem;">
+                <input type="text" id="epicIdInput" style="background-color: #1f2937; color: white; border: 1px solid #4b5563; border-radius: 0.375rem; padding: 0.5rem; width: 24rem;" placeholder="e.g. 4440244">
             </div>
-            <div class="mt-2 flex items-center">
-                <input type="file" @change="handleFileUpload" accept=".csv" class="text-white">
-            </div>
-            <p v-if="loading" class="text-yellow-400 mt-2">Loading...</p>
-            <p v-if="error" class="text-red-500 mt-2">{{ error }}</p>
+            <p id="loading" style="color: #facc15; margin-top: 0.5rem; display: none;">Loading...</p>
+            <p id="error" style="color: #ef4444; margin-top: 0.5rem;"></p>
         </div>
-
-        <!-- Fixed Position Visualise Stories Button -->
-        <div class="absolute z-10 flex items-center" style="top: 96px; left: 520px;">
-            <button @click="fetchStories" class="bg-black hover:bg-gray-800 text-white font-bold py-2 px-4 rounded border border-white">Visualise Stories</button>
-            <div class="ml-4 flex items-center">
-                <input type="checkbox" id="critical-pathways" v-model="criticalPathwaysOnly" class="form-checkbox h-5 w-5 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500">
-                <label for="critical-pathways" class="ml-2 text-white">Critical Pathways Only</label>
-            </div>
-            <div class="ml-4 flex items-center">
-                <button @click="toggleMute" class="bg-black hover:bg-gray-800 text-white font-bold py-2 px-4 rounded border border-white">
-                    <svg v-if="isMuted" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.858 5.858a1 1 0 00-1.414 1.414L12 12m0 0l-1.414 1.414a1 1 0 001.414 1.414L12 12zm0 0l7.071 7.071a1 1 0 001.414-1.414L12 12z" />
-                    </svg>
-                </button>
-            </div>
+        <div style="position: absolute; z-index: 10; top: 96px; left: 520px;">
+            <button id="visualiseButton" style="background-color: black; color: white; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid white;">Visualise Epic</button>
         </div>
-
-        <!-- Reset Position Button -->
-        <div class="absolute z-10" style="top: 141px; left: 520px;">
-            <button @click="resetPositions" class="bg-black hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-colors duration-200 border border-white">Reset Positions</button>
+        <div style="position: absolute; z-index: 10; top: 141px; left: 520px;">
+            <button id="resetButton" style="background-color: black; color: white; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid white;">Reset Positions</button>
         </div>
-
-        <!-- Clear Button -->
-        <div class="absolute z-10" style="top: 186px; left: 520px;">
-            <button @click="clearStories" class="bg-black hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-colors duration-200 border border-white">Clear</button>
+        <div style="position: absolute; z-index: 10; top: 141px; left: 680px;">
+            <button id="clearButton" style="background-color: black; color: white; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid white;">Clear</button>
         </div>
-
-        <!-- Key Section (moved to far right position) -->
-        <div class="absolute top-4 right-4 z-10 bg-black px-4 py-4 rounded-lg shadow-lg">
-            <h3 class="text-white text-base font-semibold mb-3">Key</h3>
-            <div class="flex flex-col space-y-2">
-                <div class="flex items-center space-x-3">
-                    <div class="w-5 h-5 rounded-full bg-gradient-to-br from-red-100 to-red-300 border border-red-500"></div>
-                    <span class="text-white text-sm">Red circles are Precursor Stories</span>
-                </div>
-                <div class="flex items-center space-x-3">
-                    <div class="w-5 h-5 rounded-full bg-gradient-to-br from-blue-100 to-blue-300 border border-blue-500"></div>
-                    <span class="text-white text-sm">Blue circles are Successor Stories</span>
-                </div>
-                <div class="flex items-center space-x-3">
-                    <div class="w-5 h-5 rounded-full bg-gradient-to-br from-green-100 to-green-300 border border-green-500"></div>
-                    <span class="text-white text-sm">Green circles are Standalone Stories</span>
-                </div>
-                <div class="flex items-center space-x-3">
-                    <div class="w-5 h-5 rounded-full bg-gradient-to-br from-purple-100 to-purple-300 border border-purple-500"></div>
-                    <span class="text-white text-sm">Purple circles are Chain Stories</span>
-                </div>
-            </div>
-        </div>
-
-        <div v-if="stories.length > 0" :style="{ top: topDividerY + 'px' }" class="absolute left-0 right-0 h-1 my-8" style="background-color: #343434;"></div>
-
-        <!-- Zoom functionality (moved to center-right position) -->
-        <div class="absolute top-4 right-96 z-10 flex flex-col items-center space-y-2 bg-black p-3 rounded-lg shadow-lg">
-            <div class="flex items-center space-x-2">
-                <span class="text-white text-sm">Zoom: {{ zoomLevel }}%</span>
-                <button @click="zoomOut" class="bg-black hover:bg-gray-800 text-white font-bold py-1 px-3 rounded border border-white">-</button>
-                <input type="range" min="0" max="200" v-model.number="zoomLevel" @input="applyZoom" class="w-32">
-                <button @click="zoomIn" class="bg-black hover:bg-gray-800 text-white font-bold py-1 px-3 rounded border border-white">+</button>
-            </div>
-            <!-- Screengrab Button -->
-            <button @click="takeScreengrab" class="bg-black hover:bg-gray-800 text-white font-bold py-2 px-4 rounded border border-white w-full">Screengrab</button>
-        </div>
-
-        <svg class="absolute top-0 left-0 w-full h-full" style="z-index: 0;">
-            <defs>
-                <marker id="arrow" viewBox="0 0 20 20" refX="10" refY="10"
-                    markerWidth="12" markerHeight="12"
-                    orient="auto-start-reverse">
-                  <circle cx="10" cy="10" r="6" fill="#fff" />
-                </marker>
-                <marker id="triangle" viewBox="0 0 20 20" refX="4" refY="10"
-                    markerWidth="12" markerHeight="12"
-                    orient="auto">
-                  <polygon points="4,4 16,10 4,16" fill="#fff" />
-                </marker>
-            </defs>
-            <line v-for="line in lines"
-                :x1="line.x1" :y1="line.y1"
-                :x2="line.x2" :y2="line.y2"
-                stroke="#ffffff" stroke-width="3"
-                marker-start="url(#triangle)"
-                marker-end="url(#arrow)"
-                />
-        </svg>
-
-        <user-story-card
-            v-for="(story, index) in stories"
-            :key="story.Id"
-            :story="story"
-            :style="{ top: story.y + 'px', left: story.x + 'px' }"
-            @mousedown="startDrag($event, story)"
-        ></user-story-card>
-
-        <div v-if="standaloneStories.length > 0" :style="{ top: dividerY + 'px' }" class="absolute left-0 right-0 h-1 my-8" style="background-color: #343434;"></div>
+        <div id="visualization-slate" style="position: absolute; background-color: #4F4F4F; z-index: -2; box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0, 0, 0, 0.3); border: 1px solid #3A3A3A; background-image: linear-gradient(to right, rgba(200, 200, 200, 0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(200, 200, 200, 0.1) 1px, transparent 1px); background-size: 20px 20px;"></div>
+        <svg id="svgCanvas" style="position: absolute; top: 0; left: 0; z-index: -1;"></svg>
     </div>
 
-    <audio id="pop-sound" src="sounds/mixkit-bubble-pop-up-alert-notification-2357.wav" preload="auto"></audio>
-
-    <script type="text/x-template" id="user-story-card-template">
-        <div class="user-story-card w-64 h-64 p-4 rounded-full border-2 flex flex-col items-center justify-center text-center" :class="cardClasses" :style="{ borderWidth: '9px', animationDelay: story.wobbleDelay + 's' }">
-            <div class="font-bold text-lg mb-2" style="pointer-events: none;">{{ story.Id }}</div>
-            <p class="text-sm mb-2 h-12 overflow-hidden" style="pointer-events: none;"><strong>Name:</strong> {{ story.Name.substring(0, 30) }}...</p>
-            <div class="text-xs" style="pointer-events: none;">
-                <p><strong class="font-semibold">State:</strong> {{ story.State || 'N/A' }}</p>
-                <p class="h-8 overflow-hidden"><strong class="font-semibold">Iteration:</strong> {{ story.Iteration ? story.Iteration.slice(-15) : 'N/A' }}</p>
-            </div>
-        </div>
-    </script>
-
     <script>
-        const UserStoryCard = {
-            template: '#user-story-card-template',
-            props: ['story'],
-            computed: {
-                cardClasses() {
-                    const isCriticalPathway = this.story['Critical-Pathway'];
-                    
-                    if (this.story.Successor.length > 0 && this.story.Precursor.length === 0) {
-                        return isCriticalPathway ? 
-                            'bg-gradient-to-br from-red-200 to-orange-400 border-red-600 text-black' :
-                            'bg-gradient-to-br from-red-100 to-red-300 border-red-500 text-black';
-                    } 
-                    else if (this.story.Precursor.length > 0 && this.story.Successor.length === 0) {
-                        return 'bg-gradient-to-br from-blue-100 to-blue-300 border-blue-500 text-black';
-                    }
-                    else if (this.story.Precursor.length > 0 && this.story.Successor.length > 0) {
-                        return isCriticalPathway ? 
-                            'bg-gradient-to-br from-purple-200 to-indigo-400 border-purple-600 text-black' :
-                            'bg-gradient-to-br from-purple-100 to-purple-300 border-purple-500 text-black';
-                    }
-                    else {
-                        return 'bg-gradient-to-br from-green-100 to-green-300 border-green-500 text-black';
-                    }
-                }
-            }
-        };
+        document.addEventListener('DOMContentLoaded', () => {
+            const app = document.getElementById('app');
+            const epicIdInput = document.getElementById('epicIdInput');
+            const visualiseButton = document.getElementById('visualiseButton');
+            const resetButton = document.getElementById('resetButton');
+            const clearButton = document.getElementById('clearButton');
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const svgCanvas = document.getElementById('svgCanvas');
 
-        const app = Vue.createApp({
-            components: {
-                UserStoryCard
-            },
-            data() {
-                return {
-                    stories: [],
-                    allStories: [],
-                    lines: [],
-                    draggedStory: null,
-                    offsetX: 0,
-                    offsetY: 0,
-                    userStoryIds: '',
-                    loading: false,
-                    error: null,
-                    zoomLevel: 100, // Initial zoom level
-                    dividerY: 0, // Position of the divider
-                    topDividerY: 0, // Position of the top divider
-                    standaloneStories: [], // Moved to data
-                    treeStories: [], // Moved to data
-                    originalPositions: new Map(), // Store original positions for reset functionality
-                    criticalPathwaysOnly: false,
-                    isMuted: false
-                };
-            },
-            watch: {
-                criticalPathwaysOnly(newValue) {
-                    this.filterStories();
-                }
-            },
-            async mounted() {
-                // Now, we don't automatically load stories on mount
-            },
-            methods: {
-                toggleMute() {
-                    this.isMuted = !this.isMuted;
-                },
-                handleFileUpload(event) {
-                    const file = event.target.files[0];
-                    if (!file) {
-                        return;
-                    }
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const text = e.target.result;
-                        const rows = text.split('\n').slice(1);
-                        const ids = rows.map(row => {
-                            const columns = row.split(',');
-                            if (columns.length > 3) {
-                                const id = columns[3].trim().replace(/"/g, '');
-                                if (id && !isNaN(id)) {
-                                    return id;
-                                }
-                            }
-                            return null;
-                        }).filter(id => id);
+            let allWorkItems = [];
+            let originalPositions = new Map();
+            let draggedItem = null;
+            let offsetX = 0;
+            let offsetY = 0;
 
-                        if (ids.length > 0) {
-                            this.userStoryIds = ids.join(', ');
-                        } else {
-                            this.error = 'No valid User Story IDs found in the selected file.';
-                        }
-                    };
-                    reader.readAsText(file);
-                },
-                zoomIn() {
-                    this.zoomLevel = Math.min(200, this.zoomLevel + 10);
-                },
-                zoomOut() {
-                    this.zoomLevel = Math.max(0, this.zoomLevel - 10);
-                },
-                applyZoom() {
-                    this.layoutStories();
-                },
-                async fetchStories() {
-                    if (!this.userStoryIds) return;
-
-                    this.loading = true;
-                    this.error = null;
-
-                    try {
-                        const ids = this.userStoryIds.split(',').map(id => id.trim());
-                        const response = await fetch('http://localhost:3000/api/userstories', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ ids })
-                        });
-
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-
-                        const data = await response.json();
-                        console.log('Raw data from backend:', data.user_stories);
-                        this.allStories = data.user_stories.filter(story => story != null);
-                        this.filterStories();
-                        this.playSound();
-                    } catch (error) {
-                        this.error = 'Failed to fetch user stories. Make sure the backend server is running and the IDs are correct.';
-                        console.error('Fetch error:', error);
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-                filterStories() {
-                    console.log('Filtering stories. criticalPathwaysOnly:', this.criticalPathwaysOnly);
-                    if (this.criticalPathwaysOnly) {
-                        const criticalPathwayStories = this.allStories.filter(story => story['Critical-Pathway']);
-                        const relevantStoryIds = new Set();
-
-                        criticalPathwayStories.forEach(story => {
-                            relevantStoryIds.add(story.Id);
-                            story.Successor.forEach(sId => relevantStoryIds.add(sId));
-                            story.Precursor.forEach(pId => relevantStoryIds.add(pId));
-                        });
-
-                        this.stories = this.allStories.filter(story => relevantStoryIds.has(story.Id));
-                    } else {
-                        this.stories = this.allStories;
-                    }
-                    console.log('Filtered stories:', this.stories);
-                    this.layoutStories();
-                },
-                layoutStories() {
-                    const storiesById = new Map(this.stories.map(s => [s.Id, s]));
-
-                    // 1. Separate standalone stories from those in a dependency tree
-                    this.standaloneStories = [];
-                    this.treeStories = [];
-                    this.stories.forEach(story => {
-                        if (story.Precursor.length === 0 && story.Successor.length === 0) {
-                            this.standaloneStories.push(story);
-                        } else {
-                            this.treeStories.push(story);
-                        }
-                        story.wobbleDelay = Math.random() * 2; // Random delay between 0 and 2 seconds
-                    });
-
-                    // Sort standalone stories by ID
-                    this.standaloneStories.sort((a, b) => parseInt(a.Id) - parseInt(b.Id));
-
-                    console.log('Debug - Total stories:', this.stories.length);
-                    console.log('Debug - Standalone stories:', this.standaloneStories.length);
-                    console.log('Debug - Tree stories:', this.treeStories.length);
-
-                    // Constants for layout calculations
-                    const COLUMNS = 5; // Changed from 4 to 5 for less scrolling with standalone stories
-                    const CARD_WIDTH = 256; // Unscaled card width (now circular)
-                    const CARD_HEIGHT = 256; // Changed to match width for circular shape
-                    const PADDING_X_STANDALONE = 70; // Horizontal space between cards
-                    const PADDING_Y_STANDALONE = 70; // Vertical space between cards
-                    const PADDING_X_TREE = 350;
-                    const PADDING_Y_TREE = 250; // Increased slightly for circular cards
-
-                    // Calculate divider positions
-                    this.topDividerY = 200; // Position of the top divider, below the input box
-
-                    // If we have tree stories, layout them in a fixed grid like standalone stories
-                    if (this.treeStories.length > 0) {
-                        // Use same grid layout approach as standalone stories for consistent spacing
-                        const TREE_COLUMNS = 6; // More columns for tree stories to show relationships better
-                        const MAX_TREE_COLUMNS = Math.floor((window.innerWidth - 200) / (CARD_WIDTH + PADDING_X_STANDALONE));
-                        const optimalTreeColumns = Math.min(TREE_COLUMNS, Math.max(1, MAX_TREE_COLUMNS));
-                        const actualTreeColumns = Math.max(1, Math.min(optimalTreeColumns, this.treeStories.length));
-                        
-                        const totalTreeWidth = (actualTreeColumns * CARD_WIDTH) + ((actualTreeColumns - 1) * PADDING_X_STANDALONE);
-                        const startXTreeGrid = Math.max(50, (window.innerWidth - totalTreeWidth) / 2);
-                        const START_Y_TREE = this.topDividerY + 68; // 10px gap below the 8px border of the top section
-
-                        console.log('Debug - Layout tree stories in grid:', {
-                            count: this.treeStories.length,
-                            actualTreeColumns,
-                            startXTreeGrid,
-                            startY: START_Y_TREE
-                        });
-
-                        // Position tree stories in a grid layout
-                        this.treeStories.forEach((story, index) => {
-                            const row = Math.floor(index / actualTreeColumns);
-                            const col = index % actualTreeColumns;
-
-                            story.x = startXTreeGrid + col * (CARD_WIDTH + PADDING_X_STANDALONE);
-                            story.y = START_Y_TREE + (row * (CARD_HEIGHT + PADDING_Y_STANDALONE));
-                            
-                            // Add wobble effect
-                            
-                            
-                            console.log(`Debug - Tree Story ${story.Id} positioned at:`, { x: story.x, y: story.y, row, col });
-                        });
-
-                        // Calculate where tree stories end (bottom of last row of stories including card height)
-                        const treeRows = Math.ceil(this.treeStories.length / actualTreeColumns);
-                        const lastRowBottomY = START_Y_TREE + ((treeRows - 1) * (CARD_HEIGHT + PADDING_Y_STANDALONE)) + CARD_HEIGHT;
-                        
-                        // Position bottom divider with exactly 50px gap to match top divider gap
-                        this.dividerY = lastRowBottomY + 50;
-                    } else {
-                        // No tree stories, position divider just below top divider
-                        this.dividerY = this.topDividerY + 50;
-                    }
-
-                    // Layout standalone stories below the divider, in a dynamic grid
-                    if (this.standaloneStories.length > 0) {
-                        const MAX_COLUMNS = Math.floor((window.innerWidth - 100) / (CARD_WIDTH + PADDING_X_STANDALONE));
-                        const optimalColumns = Math.min(COLUMNS, Math.max(1, MAX_COLUMNS));
-                        const actualColumns = Math.max(1, Math.min(optimalColumns, this.standaloneStories.length));
-                        
-                        const totalStandaloneWidth = (actualColumns * CARD_WIDTH) + ((actualColumns - 1) * PADDING_X_STANDALONE);
-                        const startXGrid = Math.max(50, (window.innerWidth - totalStandaloneWidth) / 2);
-
-                        console.log('Debug - Layout standalone stories:', {
-                            count: this.standaloneStories.length,
-                            actualColumns,
-                            startXGrid,
-                            dividerY: this.dividerY
-                        });
-
-                        this.standaloneStories.forEach((story, index) => {
-                            const row = Math.floor(index / actualColumns);
-                            const col = index % actualColumns;
-
-                            story.x = startXGrid + col * (CARD_WIDTH + PADDING_X_STANDALONE);
-                            story.y = this.dividerY + PADDING_Y_STANDALONE + (row * (CARD_HEIGHT + PADDING_Y_STANDALONE));
-                            
-                            // Add wobble effect
-                            
-                            
-                            console.log(`Debug - Story ${story.Id} positioned at:`, { x: story.x, y: story.y, row, col });
-                        });
-                    }
-                    
-                    // Update lines after layout is complete
-                    this.updateLines();
-                    
-                    // Save original positions for reset functionality
-                    this.saveOriginalPositions();
-                },
-                
-                saveOriginalPositions() {
-                    // Clear existing original positions
-                    this.originalPositions.clear();
-                    
-                    // Save the current positions as original positions
-                    this.stories.forEach(story => {
-                        if (story.x !== null && story.y !== null) {
-                            this.originalPositions.set(story.Id, {
-                                x: story.x,
-                                y: story.y
-                            });
-                        }
-                    });
-                    
-                    console.log('Original positions saved for', this.originalPositions.size, 'stories');
-                },
-                updateLines() {
-                    const storiesById = new Map(this.stories.map(s => [s.Id, s]));
-                    const CARD_RADIUS = 128; // Radius of circular card (256/2)
-
-                    this.lines = [];
-                    
-                    // Helper function to calculate the nearest points on circle edges
-                    const getCircleConnectionPoints = (story1, story2) => {
-                        // Calculate center points of both circles
-                        const center1X = story1.x + CARD_RADIUS;
-                        const center1Y = story1.y + CARD_RADIUS;
-                        const center2X = story2.x + CARD_RADIUS;
-                        const center2Y = story2.y + CARD_RADIUS;
-                        
-                        // Calculate the angle between centers
-                        const deltaX = center2X - center1X;
-                        const deltaY = center2Y - center1Y;
-                        const angle = Math.atan2(deltaY, deltaX);
-                        
-                        // Calculate connection points on the circumference of each circle
-                        const x1 = center1X + Math.cos(angle) * CARD_RADIUS;
-                        const y1 = center1Y + Math.sin(angle) * CARD_RADIUS;
-                        const x2 = center2X - Math.cos(angle) * CARD_RADIUS;
-                        const y2 = center2Y - Math.sin(angle) * CARD_RADIUS;
-                            
-                        return { x1, y1, x2, y2 };
-                    };
-                    
-                    // Create a map of story ID to its successors for line drawing
-                    const successorsMap = new Map();
-                    this.treeStories.forEach(story => {
-                        if (story.Successor && story.Successor.length > 0) {
-                            if (!successorsMap.has(story.Id)) {
-                                successorsMap.set(story.Id, []);
-                            }
-                            story.Successor.forEach(sId => {
-                                successorsMap.get(story.Id).push(sId);
-                            });
-                        }
-                    });
-
-                    // Also check for additional relationships based on precursors
-                    this.treeStories.forEach(story => {
-                        if (story.Precursor && story.Precursor.length > 0) {
-                            story.Precursor.forEach(pId => {
-                                const precursorStory = storiesById.get(pId);
-                                if (precursorStory) {
-                                    if (!successorsMap.has(pId)) {
-                                        successorsMap.set(pId, []);
-                                    }
-                                    if (!successorsMap.get(pId).includes(story.Id)) {
-                                        successorsMap.get(pId).push(story.Id);
-                                    }
-                                }
-                            });
-                        }
-                    });
-
-                    // Draw lines from each story to all its successors using nearest edge points
-                    successorsMap.forEach((successors, storyId) => {
-                        const story = storiesById.get(storyId);
-                        if (!story) return;
-
-                        successors.forEach(successorId => {
-                            const successor = storiesById.get(successorId);
-                            if (successor) {
-                                const connectionPoints = getCircleConnectionPoints(story, successor);
-                                this.lines.push({
-                                    x1: connectionPoints.x1,
-                                    y1: connectionPoints.y1,
-                                    x2: connectionPoints.x2,
-                                    y2: connectionPoints.y2
-                                });
-                            }
-                        });
-                    });
-                },
-                startDrag(event, story) {
-                    this.draggedStory = story;
-                    this.offsetX = event.clientX - story.x;
-                    this.offsetY = event.clientY - story.y;
-                    document.addEventListener('mousemove', this.doDrag);
-                    document.addEventListener('mouseup', this.stopDrag);
-                },
-                doDrag(event) {
-                    if (!this.draggedStory) return;
-                    this.draggedStory.x = event.clientX - this.offsetX;
-                    this.draggedStory.y = event.clientY - this.offsetY;
-                    this.updateLines();
-                },
-                stopDrag() {
-                    this.draggedStory = null;
-                    document.removeEventListener('mousemove', this.doDrag);
-                    document.removeEventListener('mouseup', this.stopDrag);
-                },
-                resetPositions() {
-                    // Reset all stories to their original positions
-                    this.stories.forEach(story => {
-                        const originalPos = this.originalPositions.get(story.Id);
-                        if (originalPos) {
-                            story.x = originalPos.x;
-                            story.y = originalPos.y;
-                        }
-                    });
-                    
-                    // Reset zoom level to 100%
-                    this.zoomLevel = 100;
-
-                    // Update the lines after resetting positions
-                    this.updateLines();
-                    
-                    console.log('All story positions and zoom have been reset to original locations');
-                },
-                clearStories() {
-                    this.stories = [];
-                    this.allStories = [];
-                    this.lines = [];
-                    this.userStoryIds = '';
-                    this.dividerY = 0;
-                    this.topDividerY = 0;
-                    this.loading = false;
-                    this.error = null;
-                    this.zoomLevel = 100;
-                    this.standaloneStories = [];
-                    this.treeStories = [];
-                },
-                playSound() {
-                    if (this.isMuted) return;
-                    const audio = document.getElementById('pop-sound');
-                    if (audio) {
-                        audio.play().catch(e => console.error("Error playing sound:", e));
-                    }
-                },
-                async loadInitialData() {
-                    try {
-                        const response = await fetch('stories/extract.csv');
-                        if (!response.ok) {
-                            throw new Error(`Failed to fetch stories/extract.csv. Status: ${response.status}`);
-                        }
-                        const data = await response.text();
-                        const rows = data.split('\n').slice(1);
-                        const ids = rows.map(row => {
-                            const trimmedRow = row.trim();
-                            if (!trimmedRow) return null;
-                            
-                            const columns = trimmedRow.split(',');
-                            if (columns.length > 3) {
-                                const id = columns[3].trim().replace(/"/g, '');
-                                if (id && !isNaN(id)) {
-                                    return id;
-                                }
-                            }
-                            return null;
-                        }).filter(id => id);
-
-                        if (ids.length > 0) {
-                            this.userStoryIds = ids.join(', ');
-                            console.log('Loaded User Story IDs from CSV:', this.userStoryIds);
-                        } else {
-                            console.warn('No valid User Story IDs found in stories/extract.csv.');
-                        }
-                    } catch (error) {
-                        console.error('Error loading initial data:', error);
-                        console.warn(`Could not load stories/extract.csv: ${error.message}`);
-                    }
-                },
-                calculateMinHeight() {
-                    // Calculate minimum height needed to show all content
-                    let minHeight = window.innerHeight; // Start with viewport height
-                    
-                    if (this.stories.length > 0) {
-                        // Find the bottom-most story position
-                        const bottomMostY = Math.max(...this.stories.map(story => 
-                            story.y ? story.y + 256 : 0 // 256 is card height
-                        ));
-                        
-                        // Add some padding to the bottom
-                        minHeight = Math.max(minHeight, bottomMostY + 100);
-                    }
-                    
-                    return minHeight;
-                },
-                async takeScreengrab() {
-                    try {
-                        // Get the main app element instead of document.body
-                        const appElement = document.getElementById('app');
-                        
-                        // Store the current zoom level and temporarily reset it for screenshot
-                        const currentZoom = this.zoomLevel;
-                        const originalTransform = appElement.style.transform;
-                        
-                        // Temporarily disable animations and transitions for a cleaner screenshot
-                        const originalAnimations = [];
-                        const animatedElements = document.querySelectorAll('.user-story-card');
-                        animatedElements.forEach(el => {
-                            originalAnimations.push(el.style.animation);
-                            el.style.animation = 'none';
-                        });
-                        
-                        // Temporarily remove zoom transform
-                        appElement.style.transform = 'scale(1)';
-                        
-                        // Store current scroll position
-                        const scrollX = window.scrollX;
-                        const scrollY = window.scrollY;
-                        
-                        // Scroll to top-left to ensure we capture from the beginning
-                        window.scrollTo(0, 0);
-                        
-                        // Wait a bit for transforms and scroll to complete
-                        await new Promise(resolve => setTimeout(resolve, 200));
-                        
-                        // Configure html2canvas options for better capture
-                        const canvas = await html2canvas(appElement, {
-                            backgroundColor: '#343434',
-                            useCORS: true,
-                            allowTaint: true,
-                            scale: 1, // Use scale 1 to avoid zoom interference
-                            scrollX: 0,
-                            scrollY: 0,
-                            width: appElement.scrollWidth, // Capture full width including scrollable content
-                            height: appElement.scrollHeight, // Capture full height including scrollable content
-                            windowWidth: Math.max(appElement.scrollWidth, window.innerWidth),
-                            windowHeight: Math.max(appElement.scrollHeight, window.innerHeight),
-                            x: 0,
-                            y: 0,
-                            logging: false, // Disable logging for cleaner console
-                            ignoreElements: (element) => {
-                                // Ignore any elements that might cause issues
-                                return element.tagName === 'IFRAME' || element.tagName === 'VIDEO';
-                            }
-                        });
-                        
-                        // Restore original transform and animations
-                        appElement.style.transform = originalTransform;
-                        animatedElements.forEach((el, index) => {
-                            el.style.animation = originalAnimations[index];
-                        });
-                        
-                        // Restore scroll position
-                        window.scrollTo(scrollX, scrollY);
-                        
-                        // Convert to JPEG with higher quality
-                        const imageData = canvas.toDataURL('image/jpeg', 0.95);
-
-                        const link = document.createElement('a');
-                        const now = new Date();
-                        const filename = `user_story_visualizer_${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}.jpeg`;
-                        link.download = filename;
-                        link.href = imageData;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        
-                        console.log('Screengrab completed successfully');
-                    } catch (error) {
-                        console.error('Error taking screengrab:', error);
-                        this.error = 'Failed to take screengrab. Please try again.';
+            const getMaxWeeksFromTShirtSize = (tshirtSize) => {
+                if (!tshirtSize) return null;
+                const matches = tshirtSize.match(/\((\d+)-(\d+) weeks\)|< (\d+) weeks/);
+                if (matches) {
+                    if (matches[3]) { // X Small (< 4 weeks)
+                        return parseInt(matches[3]);
+                    } else if (matches[2]) { // Small (4-8 weeks), Medium (9-16 weeks), Large (17-26 weeks)
+                        return parseInt(matches[2]);
                     }
                 }
-            }
+                return null;
+            };
+
+            const getCardSize = (type) => type === 'Epic' ? 300 : 200;
+
+            const fetchEpicHierarchy = async () => {
+                if (!epicIdInput.value) return;
+                loading.style.display = 'block';
+                error.textContent = '';
+
+                try {
+                    const response = await fetch('http://localhost:3000/api/epichierarchy', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ epicId: epicIdInput.value })
+                    });
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    const hierarchy = await response.json();
+                    layoutHierarchy(hierarchy);
+                } catch (err) {
+                    error.textContent = 'Failed to fetch epic hierarchy.';
+                    console.error('Fetch error:', err);
+                } finally {
+                    loading.style.display = 'none';
+                }
+            };
+
+            const flattenHierarchy = (node) => {
+                if (!node) return [];
+                const list = [{...node, children: node.children ? node.children.map(c => c.Id) : []}];
+                if (node.children) {
+                    for (const child of node.children) {
+                        list.push(...flattenHierarchy(child));
+                    }
+                }
+                return list;
+            };
+
+            const layoutHierarchy = (hierarchy) => {
+                clearVisualization();
+                allWorkItems = flattenHierarchy(hierarchy);
+
+                allWorkItems.forEach(item => {
+                    item.wobbleDelay = Math.random() * -4.375; // Use negative delay for random start
+                });
+
+                const itemsById = new Map(allWorkItems.map(item => [item.Id, item]));
+
+                const epic = itemsById.get(hierarchy.Id);
+                const features = hierarchy.children || [];
+
+                const centerX = window.innerWidth / 2;
+                const centerY = 678;
+
+                epic.x = centerX - 150;
+                epic.y = centerY - 150;
+
+                const featureOrbitRadius = 350;
+                features.forEach((featureNode, index) => {
+                    const feature = itemsById.get(featureNode.Id);
+                    const angle = (2 * Math.PI / features.length) * index;
+                    feature.x = epic.x + 150 - 100 + featureOrbitRadius * Math.cos(angle);
+                    feature.y = epic.y + 150 - 100 + featureOrbitRadius * Math.sin(angle);
+                });
+
+                renderWorkItems();
+                updateLines();
+                saveOriginalPositions();
+            };
+
+            const renderWorkItems = () => {
+                allWorkItems.forEach(item => {
+                    const card = document.createElement('div');
+                    card.id = `card-${item.Id}`;
+                    
+                    const typeClass = `${item.WorkItemType.toLowerCase()}-card`;
+                    const glowClass = item.State === 'Active' ? 'active-glow' : 'default-glow';
+                    card.className = `work-item-card ${typeClass} ${glowClass}`;
+
+                    card.style.left = `${item.x}px`;
+                    card.style.top = `${item.y}px`;
+                    card.style.animationDelay = `${item.wobbleDelay}s`; // Apply the random delay
+
+                    card.innerHTML = `
+                        <div style="font-size: 0.875rem; ${item.WorkItemType === 'Feature' ? 'padding: 10px;' : ''} display: flex; flex-direction: column; justify-content: center; flex-grow: 1; line-height: 1.2;">
+                            <div style="font-weight: bold; font-size: ${item.WorkItemType === 'Epic' ? '1.25rem' : '1.1rem'}; text-align: center;">${item.Id}</div>
+                            <p style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; margin: 0; padding: 0;">${item.Name.substring(0, 20)}...</p>
+                            ${item.WorkItemType === 'Feature' && item.Effort > 0 ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Effort:</strong> ${item.Effort}</p>` : ''}
+                            <p style="text-align: center; margin: 0; padding: 0;">${item.State || 'N/A'}</p>
+                            <p style="text-align: center; margin: 0; padding: 0;">${item.TShirtSize || 'N/A'}</p>
+                            ${item.WorkItemType === 'Epic' && item.Effort > 0 ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Epic Effort:</strong> ${item.Effort}</p>` : ''}
+                        </div>
+                    `;
+
+                    card.addEventListener('mousedown', (e) => startDrag(e, item));
+                    app.appendChild(card);
+                });
+            };
+
+            const updateLines = () => {
+                svgCanvas.innerHTML = '';
+                let minX = Infinity;
+                let minY = Infinity;
+                let maxX = -Infinity;
+                let maxY = -Infinity;
+
+                allWorkItems.forEach(item => {
+                    const itemSize = getCardSize(item.WorkItemType);
+                    minX = Math.min(minX, item.x);
+                    minY = Math.min(minY, item.y);
+                    maxX = Math.max(maxX, item.x + itemSize);
+                    maxY = Math.max(maxY, item.y + itemSize);
+                });
+
+                const padding = 50; // Padding around the visualization
+
+                // Adjust SVG and slate position and size
+                const vizWidth = (maxX - minX) + (2 * padding);
+                const vizHeight = (maxY - minY) + (2 * padding);
+
+                svgCanvas.setAttribute('width', vizWidth);
+                svgCanvas.setAttribute('height', vizHeight);
+                svgCanvas.style.left = `${minX - padding}px`;
+                svgCanvas.style.top = `${minY - padding}px`;
+
+                const slate = document.getElementById('visualization-slate');
+                if (slate) {
+                    slate.style.left = `${minX - padding}px`;
+                    slate.style.top = `${minY - padding}px`;
+                    slate.style.width = `${vizWidth}px`;
+                    slate.style.height = `${vizHeight}px`;
+                }
+
+                allWorkItems.forEach(parent => {
+                    if (parent.children && parent.children.length > 0) {
+                        const parentSize = getCardSize(parent.WorkItemType) / 2;
+
+                        parent.children.forEach(childId => {
+                            const child = allWorkItems.find(i => i.Id === childId);
+                            if (child) {
+                                const childSize = getCardSize(child.WorkItemType) / 2;
+
+                                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                                line.setAttribute('x1', (parent.x + parentSize) - minX + padding);
+                                line.setAttribute('y1', (parent.y + parentSize) - minY + padding);
+                                line.setAttribute('x2', (child.x + childSize) - minX + padding);
+                                line.setAttribute('y2', (child.y + childSize) - minY + padding);
+                                line.setAttribute('stroke-width', '6');
+
+                                const epicMaxWeeks = getMaxWeeksFromTShirtSize(parent.TShirtSize);
+                                const featureMaxWeeks = getMaxWeeksFromTShirtSize(child.TShirtSize);
+
+                                if (epicMaxWeeks !== null && featureMaxWeeks !== null && featureMaxWeeks < epicMaxWeeks) {
+                                    line.setAttribute('stroke', '#ffffff'); // Revert to white
+                                } else if (epicMaxWeeks !== null && featureMaxWeeks !== null && featureMaxWeeks > epicMaxWeeks) {
+                                    line.setAttribute('stroke', '#F44336'); // Modern red
+                                } else {
+                                    line.setAttribute('stroke', '#ffffff');
+                                }
+                                svgCanvas.appendChild(line);
+                            }
+                        });
+                    }
+                });
+            };
+
+            const saveOriginalPositions = () => {
+                originalPositions.clear();
+                allWorkItems.forEach(item => {
+                    originalPositions.set(item.Id, { x: item.x, y: item.y });
+                });
+            };
+
+            const resetPositions = () => {
+                allWorkItems.forEach(item => {
+                    const originalPos = originalPositions.get(item.Id);
+                    if (originalPos) {
+                        item.x = originalPos.x;
+                        item.y = originalPos.y;
+                        const card = document.getElementById(`card-${item.Id}`);
+                        if (card) {
+                            card.style.left = `${item.x}px`;
+                            card.style.top = `${item.y}px`;
+                        }
+                    }
+                });
+                updateLines();
+            };
+
+            const clearVisualization = () => {
+                allWorkItems = [];
+                originalPositions.clear();
+                app.querySelectorAll('.work-item-card').forEach(el => el.remove());
+                svgCanvas.innerHTML = '';
+                epicIdInput.value = '';
+                error.textContent = '';
+            };
+
+            const startDrag = (e, item) => {
+                draggedItem = item;
+                const card = document.getElementById(`card-${item.Id}`);
+                const rect = card.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                document.addEventListener('mousemove', doDrag);
+                document.addEventListener('mouseup', stopDrag);
+            };
+
+            const doDrag = (e) => {
+                if (!draggedItem) return;
+                draggedItem.x = e.clientX - offsetX;
+                draggedItem.y = e.clientY - offsetY;
+                const card = document.getElementById(`card-${draggedItem.Id}`);
+                card.style.left = `${draggedItem.x}px`;
+                card.style.top = `${draggedItem.y}px`;
+                updateLines();
+            };
+
+            const stopDrag = () => {
+                draggedItem = null;
+                document.removeEventListener('mousemove', doDrag);
+                document.removeEventListener('mouseup', stopDrag);
+            };
+
+            visualiseButton.addEventListener('click', fetchEpicHierarchy);
+            resetButton.addEventListener('click', resetPositions);
+            clearButton.addEventListener('click', clearVisualization);
         });
-
-        app.component('user-story-card', UserStoryCard);
-
-        app.mount('#app');
     </script>
 </body>
 </html>
