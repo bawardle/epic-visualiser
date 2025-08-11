@@ -13,6 +13,8 @@
         .work-item-card.closed-glow { animation: green-pulse 2s infinite, wobble 4.375s infinite alternate; }
         .epic-card { width: 300px; height: 300px; background-color: #ffedd5; border: 12px solid #fb923c; }
         .feature-card { width: 200px; height: 200px; background-color: #e9d5ff; border: 8px solid #a855f7; }
+        .initiative-card { width: 350px; height: 350px; background-color: #d1fae5; border: 12px solid #10b981; }
+        .user-story-card { width: 100px; height: 100px; background-color: #e0f2fe; border: 4px solid #0ea5e9; }
         @keyframes border-pulse {
             0% { box-shadow: 0 0 0 0 currentColor; }
             50% { box-shadow: 0 0 0 11px rgba(0, 0, 0, 0.2); }
@@ -35,22 +37,29 @@
             75% { transform: translate(2px, -2px); }
             100% { transform: translate(-2px, -2px); }
         }
+        .fade-transition {
+            transition: opacity 0.5s ease-in-out;
+        }
+        .work-item-card.removed-glow {
+            filter: grayscale(100%);
+            animation: border-pulse 2s infinite, wobble 4.375s infinite alternate;
+        }
     </style>
 </head>
 <body>
     <div id="app">
-        <div style="position: absolute; top: 0; left: 0; right: 0; background-color: #16131D; height: 200px; border-bottom: 8px solid #D3D3D3; z-index: 0;"></div>
+        
         <div style="position: absolute; top: 1rem; left: 1rem; z-index: 10;">
-            <h1 style="font-size: 1.875rem; font-weight: bold; color: white;">Epic Estimation Visualiser</h1>
-            <p style="color: #9ca3af;">Enter an Epic ID to visualise the hierarchy.</p>
+            <h1 style="font-size: 1.875rem; font-weight: bold; color: white;">Ado Initiative Traverser</h1>
+            <p style="color: #9ca3af;">Enter an Initiative ID to visualise the hierarchy.</p>
             <div style="margin-top: 1rem;">
-                <input type="text" id="epicIdInput" style="background-color: #1f2937; color: white; border: 1px solid #4b5563; border-radius: 0.375rem; padding: 0.5rem; width: 24rem;" placeholder="e.g. 4440244">
+                <input type="text" id="epicIdInput" style="background-color: #1f2937; color: white; border: 1px solid #4b5563; border-radius: 0.375rem; padding: 0.5rem; width: 24rem;" placeholder="E.g. 4000674...">
             </div>
             <p id="loading" style="color: #facc15; margin-top: 0.5rem; display: none;">Loading...</p>
             <p id="error" style="color: #ef4444; margin-top: 0.5rem;"></p>
         </div>
         <div style="position: absolute; z-index: 10; top: 96px; left: 520px;">
-            <button id="visualiseButton" style="background-color: black; color: white; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid white;">Visualise Epic</button>
+            <button id="visualiseButton" style="background-color: black; color: white; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid white;">Display Initiative</button>
         </div>
         <div style="position: absolute; z-index: 10; top: 141px; left: 520px;">
             <button id="resetButton" style="background-color: black; color: white; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid white;">Reset Positions</button>
@@ -58,7 +67,6 @@
         <div style="position: absolute; z-index: 10; top: 141px; left: 680px;">
             <button id="clearButton" style="background-color: black; color: white; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid white;">Clear</button>
         </div>
-        <div id="visualization-slate" style="position: absolute; background-color: #4F4F4F; z-index: -2; box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0, 0, 0, 0.3); border: 1px solid #3A3A3A; background-image: linear-gradient(to right, rgba(200, 200, 200, 0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(200, 200, 200, 0.1) 1px, transparent 1px); background-size: 20px 20px;"></div>
         <svg id="svgCanvas" style="position: absolute; top: 0; left: 0; z-index: -1;"></svg>
     </div>
 
@@ -73,11 +81,20 @@
             const error = document.getElementById('error');
             const svgCanvas = document.getElementById('svgCanvas');
 
+            // Adjust SVG canvas to match window size
+            svgCanvas.style.width = '100%';
+            svgCanvas.style.height = '100%';
+            svgCanvas.style.left = '0px';
+            svgCanvas.style.top = '0px';
+
             let allWorkItems = [];
             let originalPositions = new Map();
             let draggedItem = null;
             let offsetX = 0;
             let offsetY = 0;
+            let isDragging = false;
+            let currentlyRenderedItems = [];
+            let currentView = 'epic';
 
             const getMaxWeeksFromTShirtSize = (tshirtSize) => {
                 if (!tshirtSize) return null;
@@ -92,24 +109,90 @@
                 return null;
             };
 
-            const getCardSize = (type) => type === 'Epic' ? 300 : 200;
+            const getCardSize = (type) => {
+                if (type === 'Epic') return 300;
+                if (type === 'Feature') return 200;
+                if (type === 'User Story') return 100;
+                if (type === 'Initiative') return 350;
+                return 100;
+            }
 
-            const fetchEpicHierarchy = async () => {
+            const layoutFeatureView = async (featureId) => {
+                console.log('--- Layout Feature View ---');
+                console.log('Feature ID:', featureId);
+                console.log('All work items:', allWorkItems);
+                clearVisualization(false);
+                await new Promise(resolve => setTimeout(resolve, 500)); // Wait for fade-out
+                const itemsById = new Map(allWorkItems.map(item => [item.Id, item]));
+                const feature = itemsById.get(featureId);
+                console.log('Feature:', feature);
+                if (!feature) {
+                    console.error('Feature not found!');
+                    return;
+                }
+                const userStories = feature.children.map(child => itemsById.get(child.Id));
+                console.log('User stories:', userStories);
+
+                const centerX = window.innerWidth / 2;
+                const centerY = 678;
+
+                const outerSize = 150; // User story size - Increased from 120
+                const centerSize = Math.round(outerSize * 1.41); // Feature size - Recalculated
+
+                feature.displaySize = centerSize;
+                userStories.forEach(us => us.displaySize = outerSize);
+
+                feature.x = centerX - centerSize / 2;
+                feature.y = centerY - centerSize / 2;
+
+                const userStoryOrbitRadius = 350;
+                userStories.forEach((userStory, index) => {
+                    const angle = (2 * Math.PI / userStories.length) * index;
+                    userStory.x = feature.x + centerSize / 2 - outerSize / 2 + userStoryOrbitRadius * Math.cos(angle);
+                    userStory.y = feature.y + centerSize / 2 - outerSize / 2 + userStoryOrbitRadius * Math.sin(angle);
+                });
+
+                const itemsToRender = [feature, ...userStories];
+                currentlyRenderedItems = itemsToRender;
+                renderWorkItems(itemsToRender);
+                updateLines(itemsToRender);
+                currentView = 'feature';
+            };
+
+            let originalHierarchy = null;
+            let currentEpicHierarchy = null;
+
+            const fetchHierarchy = async () => {
                 if (!epicIdInput.value) return;
                 loading.style.display = 'block';
                 error.textContent = '';
 
                 try {
-                    const response = await fetch('http://localhost:3000/api/epichierarchy', {
+                    const response = await fetch('http://localhost:3000/api/initiativehierarchy', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ epicId: epicIdInput.value })
+                        body: JSON.stringify({ initiativeId: epicIdInput.value })
                     });
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+                    if (!response.ok) {
+                        let errorMessage = `HTTP error! status: ${response.status}`;
+                        try {
+                            const errorData = await response.json();
+                            if (errorData && errorData.error) {
+                                errorMessage = errorData.error;
+                            }
+                        } catch (e) {
+                            // The error response was not valid JSON. Use the default message.
+                        }
+                        throw new Error(errorMessage);
+                    }
+
                     const hierarchy = await response.json();
+                    originalHierarchy = hierarchy;
+                    console.log('Received hierarchy:', hierarchy);
                     layoutHierarchy(hierarchy);
                 } catch (err) {
-                    error.textContent = 'Failed to fetch epic hierarchy.';
+                    error.textContent = err.message;
                     console.error('Fetch error:', err);
                 } finally {
                     loading.style.display = 'none';
@@ -118,7 +201,7 @@
 
             const flattenHierarchy = (node) => {
                 if (!node) return [];
-                const list = [{...node, children: node.children ? node.children.map(c => c.Id) : []}];
+                const list = [node];
                 if (node.children) {
                     for (const child of node.children) {
                         list.push(...flattenHierarchy(child));
@@ -127,8 +210,9 @@
                 return list;
             };
 
-            const layoutHierarchy = (hierarchy) => {
-                clearVisualization();
+            const layoutHierarchy = async (hierarchy) => {
+                clearVisualization(false);
+                await new Promise(resolve => setTimeout(resolve, 500)); // Wait for fade-out
                 allWorkItems = flattenHierarchy(hierarchy);
 
                 allWorkItems.forEach(item => {
@@ -137,109 +221,154 @@
 
                 const itemsById = new Map(allWorkItems.map(item => [item.Id, item]));
 
-                const epic = itemsById.get(hierarchy.Id);
-                const features = hierarchy.children || [];
-
                 const centerX = window.innerWidth / 2;
                 const centerY = 678;
 
-                epic.x = centerX - 150;
-                epic.y = centerY - 150;
+                // Position the central item (Initiative or Epic)
+                let centralItem;
+                let orbitingItems = [];
+                let orbitRadius;
 
-                const featureOrbitRadius = 350;
-                features.forEach((featureNode, index) => {
-                    const feature = itemsById.get(featureNode.Id);
-                    const angle = (2 * Math.PI / features.length) * index;
-                    feature.x = epic.x + 150 - 100 + featureOrbitRadius * Math.cos(angle);
-                    feature.y = epic.y + 150 - 100 + featureOrbitRadius * Math.sin(angle);
+                if (hierarchy.WorkItemType === 'Initiative') {
+                    centralItem = itemsById.get(hierarchy.Id);
+                    orbitingItems = (hierarchy.children || []).map(child => itemsById.get(child.Id));
+                    orbitRadius = 375; // Orbit radius for Epics around Initiative
+
+                    const outerSize = 210;
+                    const centerSize = Math.round(outerSize * 1.41);
+                    
+                    centralItem.displaySize = centerSize;
+                    orbitingItems.forEach(epic => epic.displaySize = outerSize);
+
+                    centralItem.x = centerX - centerSize / 2;
+                    centralItem.y = centerY - centerSize / 2;
+
+                } else if (hierarchy.WorkItemType === 'Epic') {
+                    centralItem = itemsById.get(hierarchy.Id);
+                    orbitingItems = (hierarchy.children || []).map(child => itemsById.get(child.Id));
+                    orbitRadius = 350; // Orbit radius for Features around Epic
+
+                    const outerSize = 180;
+                    const centerSize = Math.round(outerSize * 1.41);
+
+                    centralItem.displaySize = centerSize;
+                    orbitingItems.forEach(feature => feature.displaySize = outerSize);
+                    
+                    centralItem.x = centerX - centerSize / 2;
+                    centralItem.y = centerY - centerSize / 2;
+                    currentEpicHierarchy = hierarchy; // Store this Epic hierarchy
+                }
+
+                // Calculate total story points for each feature (if applicable)
+                if (hierarchy.WorkItemType === 'Epic') {
+                    orbitingItems.forEach(featureNode => {
+                        const feature = itemsById.get(featureNode.Id);
+                        if (feature && feature.children) {
+                            feature.totalStoryPoints = feature.children.reduce((total, child) => {
+                                const childItem = allWorkItems.find(i => i.Id === child.Id);
+                                return total + (childItem && childItem.StoryPoints ? childItem.StoryPoints : 0);
+                            }, 0);
+                        }
+                    });
+                }
+
+                // Position orbiting items
+                orbitingItems.forEach((itemNode, index) => {
+                    const item = itemsById.get(itemNode.Id);
+                    const angle = (2 * Math.PI / orbitingItems.length) * index;
+                    const centralItemSize = centralItem.displaySize;
+                    const orbitingItemSize = item.displaySize;
+
+                    item.x = centralItem.x + centralItemSize / 2 - orbitingItemSize / 2 + orbitRadius * Math.cos(angle);
+                    item.y = centralItem.y + centralItemSize / 2 - orbitingItemSize / 2 + orbitRadius * Math.sin(angle);
                 });
 
-                renderWorkItems();
-                updateLines();
+                currentlyRenderedItems = [centralItem, ...orbitingItems.map(f => itemsById.get(f.Id))];
+                renderWorkItems(currentlyRenderedItems);
+                updateLines(currentlyRenderedItems);
                 saveOriginalPositions();
+                currentView = hierarchy.WorkItemType.toLowerCase();
             };
 
-            const renderWorkItems = () => {
-                allWorkItems.forEach(item => {
+            const renderWorkItems = (itemsToRender) => {
+                itemsToRender.forEach(item => {
                     const card = document.createElement('div');
                     card.id = `card-${item.Id}`;
                     
-                    const typeClass = `${item.WorkItemType.toLowerCase()}-card`;
-                    const glowClass = item.State === 'Active' ? 'active-glow' : 'default-glow';
-                    card.className = `work-item-card ${typeClass} ${glowClass}`;
+                    const typeClass = `${item.WorkItemType.toLowerCase().replace(' ', '-')}-card`;
+                    let glowClass;
+                    if (item.State === 'Removed') {
+                        glowClass = 'removed-glow';
+                    } else if (item.State === 'Active') {
+                        glowClass = 'active-glow';
+                    } else {
+                        glowClass = 'default-glow';
+                    }
+                    card.className = `work-item-card ${typeClass} ${glowClass} fade-transition`;
+                    if (item.State === 'Removed') {
+                        card.style.backgroundColor = '#cccccc';
+                        card.style.borderColor = '#999999';
+                    }
+                    card.style.opacity = '0'; // Start invisible for fade-in
 
                     card.style.left = `${item.x}px`;
                     card.style.top = `${item.y}px`;
+                    card.style.width = `${item.displaySize || getCardSize(item.WorkItemType)}px`;
+                    card.style.height = `${item.displaySize || getCardSize(item.WorkItemType)}px`;
                     card.style.animationDelay = `${item.wobbleDelay}s`; // Apply the random delay
 
                     card.innerHTML = `
-                        <div style="font-size: 0.875rem; ${item.WorkItemType === 'Feature' ? 'padding: 10px;' : ''} display: flex; flex-direction: column; justify-content: center; flex-grow: 1; line-height: 1.2;">
-                            <div style="font-weight: bold; font-size: ${item.WorkItemType === 'Epic' ? '1.25rem' : '1.1rem'}; text-align: center;">${item.Id}</div>
-                            <p style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; margin: 0; padding: 0;">${item.Name.substring(0, 20)}...</p>
+                        <div style="font-size: ${item.WorkItemType === 'Initiative' ? '1.76rem' : '0.875rem'}; ${item.WorkItemType === 'Feature' ? 'padding: 10px;' : ''} display: flex; flex-direction: column; justify-content: center; flex-grow: 1; line-height: 1.2;">
+                            <div style="font-weight: bold; font-size: ${item.WorkItemType === 'Initiative' ? '2.21rem' : item.WorkItemType === 'Epic' ? '1.25rem' : '1.1rem'}; text-align: center;">${item.Id}</div>
+                            <p style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; margin: 0; padding: 0;">${item.Name.substring(0, 15)}...</p>
+                            ${item.WorkItemType === 'User Story' ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Story Points:</strong> ${item.StoryPoints || 0}</p>` : ''}
                             ${item.WorkItemType === 'Feature' && item.Effort > 0 ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Effort:</strong> ${item.Effort}</p>` : ''}
-                            <p style="text-align: center; margin: 0; padding: 0;">${item.State || 'N/A'}</p>
-                            <p style="text-align: center; margin: 0; padding: 0;">${item.TShirtSize || 'N/A'}</p>
+                            ${item.WorkItemType !== 'User Story' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.State || 'N/A'}</p>` : ''}
+                            ${item.WorkItemType !== 'User Story' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.TShirtSize || 'N/A'}</p>` : ''}
+                            ${item.WorkItemType === 'Feature' && item.totalStoryPoints > 0 ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Story Point Total:</strong> ${item.totalStoryPoints}</p>` : ''}
                             ${item.WorkItemType === 'Epic' && item.Effort > 0 ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Epic Effort:</strong> ${item.Effort}</p>` : ''}
                         </div>
                     `;
 
                     card.addEventListener('mousedown', (e) => startDrag(e, item));
                     app.appendChild(card);
+
+                    // Trigger fade-in
+                    setTimeout(() => {
+                        card.style.opacity = '1';
+                    }, 10); // Small delay to ensure CSS transition applies
                 });
             };
 
-            const updateLines = () => {
+            const updateLines = (itemsToRender) => {
+                svgCanvas.style.opacity = '0'; // Start invisible for fade-in
                 svgCanvas.innerHTML = '';
-                let minX = Infinity;
-                let minY = Infinity;
-                let maxX = -Infinity;
-                let maxY = -Infinity;
 
-                allWorkItems.forEach(item => {
-                    const itemSize = getCardSize(item.WorkItemType);
-                    minX = Math.min(minX, item.x);
-                    minY = Math.min(minY, item.y);
-                    maxX = Math.max(maxX, item.x + itemSize);
-                    maxY = Math.max(maxY, item.y + itemSize);
-                });
+                // Use window dimensions for SVG
+                svgCanvas.setAttribute('width', window.innerWidth);
+                svgCanvas.setAttribute('height', window.innerHeight);
+                svgCanvas.style.left = '0px';
+                svgCanvas.style.top = '0px';
+                svgCanvas.style.transition = 'opacity 0.5s ease-in-out';
 
-                const padding = 50; // Padding around the visualization
-
-                // Adjust SVG and slate position and size
-                const vizWidth = (maxX - minX) + (2 * padding);
-                const vizHeight = (maxY - minY) + (2 * padding);
-
-                svgCanvas.setAttribute('width', vizWidth);
-                svgCanvas.setAttribute('height', vizHeight);
-                svgCanvas.style.left = `${minX - padding}px`;
-                svgCanvas.style.top = `${minY - padding}px`;
-
-                const slate = document.getElementById('visualization-slate');
-                if (slate) {
-                    slate.style.left = `${minX - padding}px`;
-                    slate.style.top = `${minY - padding}px`;
-                    slate.style.width = `${vizWidth}px`;
-                    slate.style.height = `${vizHeight}px`;
-                }
-
-                allWorkItems.forEach(parent => {
+                itemsToRender.forEach(parent => {
                     if (parent.children && parent.children.length > 0) {
-                        const parentSize = getCardSize(parent.WorkItemType) / 2;
+                        const parentSize = (parent.displaySize || getCardSize(parent.WorkItemType)) / 2;
 
-                        parent.children.forEach(childId => {
-                            const child = allWorkItems.find(i => i.Id === childId);
-                            if (child) {
-                                const childSize = getCardSize(child.WorkItemType) / 2;
+                        parent.children.forEach(child => {
+                            const childItem = itemsToRender.find(i => i.Id === child.Id);
+                            if (childItem) {
+                                const childSize = (childItem.displaySize || getCardSize(childItem.WorkItemType)) / 2;
 
                                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                                line.setAttribute('x1', (parent.x + parentSize) - minX + padding);
-                                line.setAttribute('y1', (parent.y + parentSize) - minY + padding);
-                                line.setAttribute('x2', (child.x + childSize) - minX + padding);
-                                line.setAttribute('y2', (child.y + childSize) - minY + padding);
+                                line.setAttribute('x1', parent.x + parentSize);
+                                line.setAttribute('y1', parent.y + parentSize);
+                                line.setAttribute('x2', childItem.x + childSize);
+                                line.setAttribute('y2', childItem.y + childSize);
                                 line.setAttribute('stroke-width', '6');
 
                                 const epicMaxWeeks = getMaxWeeksFromTShirtSize(parent.TShirtSize);
-                                const featureMaxWeeks = getMaxWeeksFromTShirtSize(child.TShirtSize);
+                                const featureMaxWeeks = getMaxWeeksFromTShirtSize(childItem.TShirtSize);
 
                                 if (epicMaxWeeks !== null && featureMaxWeeks !== null && featureMaxWeeks < epicMaxWeeks) {
                                     line.setAttribute('stroke', '#ffffff'); // Revert to white
@@ -253,6 +382,11 @@
                         });
                     }
                 });
+
+                // Trigger fade-in
+                setTimeout(() => {
+                    svgCanvas.style.opacity = '1';
+                }, 10); // Small delay to ensure CSS transition applies
             };
 
             const saveOriginalPositions = () => {
@@ -275,20 +409,30 @@
                         }
                     }
                 });
-                updateLines();
+                updateLines(currentlyRenderedItems);
             };
 
-            const clearVisualization = () => {
-                allWorkItems = [];
-                originalPositions.clear();
-                app.querySelectorAll('.work-item-card').forEach(el => el.remove());
+            const clearVisualization = (fullClear = true) => {
+                const cards = app.querySelectorAll('.work-item-card');
+                cards.forEach(card => {
+                    card.classList.add('fade-transition');
+                    card.style.opacity = '0';
+                });
+                // No setTimeout here, make it synchronous
+                cards.forEach(card => card.remove());
                 svgCanvas.innerHTML = '';
-                epicIdInput.value = '';
                 error.textContent = '';
+                if (fullClear) {
+                    allWorkItems = [];
+                    originalHierarchy = null;
+                    originalPositions.clear();
+                    epicIdInput.value = '';
+                }
             };
 
             const startDrag = (e, item) => {
                 draggedItem = item;
+                isDragging = false; // Assume not dragging initially
                 const card = document.getElementById(`card-${item.Id}`);
                 const rect = card.getBoundingClientRect();
                 offsetX = e.clientX - rect.left;
@@ -299,21 +443,57 @@
 
             const doDrag = (e) => {
                 if (!draggedItem) return;
+                isDragging = true; // If mouse moves, it's a drag
                 draggedItem.x = e.clientX - offsetX;
                 draggedItem.y = e.clientY - offsetY;
                 const card = document.getElementById(`card-${draggedItem.Id}`);
                 card.style.left = `${draggedItem.x}px`;
                 card.style.top = `${draggedItem.y}px`;
-                updateLines();
+                updateLines(currentlyRenderedItems);
             };
 
-            const stopDrag = () => {
-                draggedItem = null;
+            const stopDrag = async (e) => {
                 document.removeEventListener('mousemove', doDrag);
                 document.removeEventListener('mouseup', stopDrag);
+
+                if (!isDragging && draggedItem) {
+                    // It was a click, not a drag
+                    const clickedItem = draggedItem;
+
+                    if (clickedItem.Id === currentlyRenderedItems[0].Id) {
+                        // Clicked the central item (zoom out)
+                        if (currentView === 'feature') {
+                            // Zoom out from Feature to Epic view
+                            currentlyRenderedItems.forEach(item => {
+                                delete item.displaySize;
+                            });
+                            clearVisualization(false);
+                            await layoutHierarchy(currentEpicHierarchy);
+                        } else if (currentView === 'epic') {
+                            // Zoom out from Epic to Initiative view
+                            currentlyRenderedItems.forEach(item => {
+                                delete item.displaySize;
+                            });
+                            clearVisualization(false);
+                            await layoutHierarchy(originalHierarchy);
+                        } else if (currentView === 'initiative') {
+                            // Already at top level, do nothing or provide feedback
+                            console.log('Already at Initiative level, cannot zoom out further.');
+                        }
+                    } else {
+                        // Clicked an orbiting item (zoom in)
+                        if (currentView === 'initiative' && clickedItem.WorkItemType === 'Epic') {
+                            await layoutHierarchy(clickedItem);
+                        } else if (currentView === 'epic' && clickedItem.WorkItemType === 'Feature') {
+                            await layoutFeatureView(clickedItem.Id);
+                        }
+                    }
+                }
+                draggedItem = null;
+                isDragging = false;
             };
 
-            visualiseButton.addEventListener('click', fetchEpicHierarchy);
+            visualiseButton.addEventListener('click', fetchHierarchy);
             resetButton.addEventListener('click', resetPositions);
             clearButton.addEventListener('click', clearVisualization);
         });

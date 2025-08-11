@@ -29,35 +29,68 @@ const orgUrl = organizationUrl;
 const authHandler = ado.getPersonalAccessTokenHandler(token);
 const connection = new ado.WebApi(orgUrl, authHandler);
 
-app.post("/api/epichierarchy", async (req, res) => {
-    logToFile('Received POST request to /api/epichierarchy');
-    console.log('Received POST request to /api/epichierarchy');
-    const { epicId } = req.body;
-    if (!epicId) {
-        logToFile("Error: Invalid request body. 'epicId' is required.");
-        return res.status(400).json({ error: "Invalid request body. 'epicId' is required." });
+const BATCH_SIZE = 200;
+
+async function getWorkItemsInBatches(witApi, ids) {
+    let workItems = [];
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const batch = ids.slice(i, i + BATCH_SIZE);
+        const batchWorkItems = await witApi.getWorkItems(batch, ["System.Id", "System.Title", "System.State", "System.WorkItemType", "Microsoft.VSTS.Scheduling.Effort", "Custom.TShirtSize", "Microsoft.VSTS.Scheduling.StoryPoints"]);
+        workItems = workItems.concat(batchWorkItems);
+    }
+    return workItems;
+}
+
+app.post("/api/initiativehierarchy", async (req, res) => {
+    const { initiativeId } = req.body;
+    if (!initiativeId) {
+        return res.status(400).json({ error: "Invalid request body. 'initiativeId' is required." });
     }
 
     try {
         const witApi = await connection.getWorkItemTrackingApi();
 
-        // Step 1: Get the main epic
-        const epicWorkItem = await witApi.getWorkItem(parseInt(epicId), ["System.Id", "System.Title", "System.State", "System.WorkItemType", "Microsoft.VSTS.Scheduling.Effort", "Custom.TShirtSize"]);
+        // Step 1: Get the main initiative
+        const initiativeWorkItem = await witApi.getWorkItem(parseInt(initiativeId), ["System.Id", "System.Title", "System.State", "System.WorkItemType", "Microsoft.VSTS.Scheduling.Effort", "Custom.TShirtSize", "Microsoft.VSTS.Scheduling.StoryPoints"]);
+
+        if (!initiativeWorkItem) {
+            return res.status(404).json({ error: `Initiative with ID '${initiativeId}' not found.` });
+        }
         
-        const allIds = new Set([epicWorkItem.id]);
+        const allIds = new Set([initiativeWorkItem.id]);
         const relations = [];
 
-        // Step 2: Get direct children of the epic (Features)
-        const featureLinks = await witApi.queryByWiql({ query: `SELECT [System.Id] FROM WorkItemLinks WHERE [Source].[System.Id] = ${epicId} AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward' AND [Target].[System.WorkItemType] = 'Feature' MODE (MustContain)` }, projectName);
+        // Step 2: Get direct children of the initiative (Epics)
+        const epicLinks = await witApi.queryByWiql({ query: `SELECT [System.Id] FROM WorkItemLinks WHERE [Source].[System.Id] = ${initiativeId} AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward' AND [Target].[System.WorkItemType] = 'Epic' MODE (MustContain)` }, projectName);
 
-        if (featureLinks.workItemRelations.length > 0) {
-            const featureIds = featureLinks.workItemRelations.map(rel => rel.target.id);
-            featureIds.forEach(id => allIds.add(id));
-            relations.push(...featureLinks.workItemRelations);
+        if (epicLinks.workItemRelations.length > 0) {
+            const epicIds = epicLinks.workItemRelations.map(rel => rel.target.id);
+            epicIds.forEach(id => allIds.add(id));
+            relations.push(...epicLinks.workItemRelations);
+
+            // Step 3: For each epic, get its children (Features)
+            for (const epicId of epicIds) {
+                const featureLinks = await witApi.queryByWiql({ query: `SELECT [System.Id] FROM WorkItemLinks WHERE [Source].[System.Id] = ${epicId} AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward' AND [Target].[System.WorkItemType] = 'Feature' MODE (MustContain)` }, projectName);
+                if (featureLinks.workItemRelations.length > 0) {
+                    const featureIds = featureLinks.workItemRelations.map(rel => rel.target.id);
+                    featureIds.forEach(id => allIds.add(id));
+                    relations.push(...featureLinks.workItemRelations);
+
+                    // Step 4: For each feature, get its children (User Stories)
+                    for (const featureId of featureIds) {
+                        const userStoryLinks = await witApi.queryByWiql({ query: `SELECT [System.Id] FROM WorkItemLinks WHERE [Source].[System.Id] = ${featureId} AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward' AND [Target].[System.WorkItemType] = 'User Story'` }, projectName);
+                        if (userStoryLinks.workItemRelations.length > 0) {
+                            const userStoryIds = userStoryLinks.workItemRelations.map(rel => rel.target.id);
+                            userStoryIds.forEach(id => allIds.add(id));
+                            relations.push(...userStoryLinks.workItemRelations);
+                        }
+                    }
+                }
+            }
         }
 
-        // Step 4: Fetch all work items in one call
-        const workItems = await witApi.getWorkItems(Array.from(allIds), ["System.Id", "System.Title", "System.State", "System.WorkItemType", "Microsoft.VSTS.Scheduling.Effort", "Custom.TShirtSize"]);
+        // Step 5: Fetch all work items in one call
+        const workItems = await getWorkItemsInBatches(witApi, Array.from(allIds));
 
         const workItemsMap = new Map(workItems.map(item => [item.id, {
             Id: item.id.toString(),
@@ -66,10 +99,11 @@ app.post("/api/epichierarchy", async (req, res) => {
             WorkItemType: item.fields["System.WorkItemType"],
             Effort: item.fields["Microsoft.VSTS.Scheduling.Effort"] || 0,
             TShirtSize: item.fields["Custom.TshirtSize"],
+            StoryPoints: item.fields["Microsoft.VSTS.Scheduling.StoryPoints"] || 0,
             children: []
         }]));
 
-        // Step 5: Build the hierarchy
+        // Step 6: Build the hierarchy
         relations.forEach(rel => {
             if (rel.source && rel.target) {
                 const sourceNode = workItemsMap.get(rel.source.id);
@@ -80,17 +114,16 @@ app.post("/api/epichierarchy", async (req, res) => {
             }
         });
 
-        const root = workItemsMap.get(epicWorkItem.id);
+        const root = workItemsMap.get(initiativeWorkItem.id);
         if (root) {
             res.json(root);
         } else {
-            res.status(404).json({ error: "Epic not found or hierarchy could not be constructed." });
+            res.status(404).json({ error: "Initiative not found or hierarchy could not be constructed." });
         }
 
     } catch (error) {
         console.error(error);
-        logToFile(`Error in /api/epichierarchy: ${error.message}\nStack: ${error.stack}`);
-        res.status(500).json({ error: "Failed to fetch epic hierarchy from Azure DevOps." });
+        res.status(500).json({ error: "Failed to fetch initiative hierarchy from Azure DevOps." });
     }
 });
 
