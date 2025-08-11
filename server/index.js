@@ -83,6 +83,16 @@ app.post("/api/initiativehierarchy", async (req, res) => {
                             const userStoryIds = userStoryLinks.workItemRelations.map(rel => rel.target.id);
                             userStoryIds.forEach(id => allIds.add(id));
                             relations.push(...userStoryLinks.workItemRelations);
+
+                            // Step 5: For each user story, get its children (Tasks)
+                            for (const userStoryId of userStoryIds) {
+                                const taskLinks = await witApi.queryByWiql({ query: `SELECT [System.Id] FROM WorkItemLinks WHERE [Source].[System.Id] = ${userStoryId} AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward' AND [Target].[System.WorkItemType] = 'Task'` }, projectName);
+                                if (taskLinks.workItemRelations.length > 0) {
+                                    const taskIds = taskLinks.workItemRelations.map(rel => rel.target.id);
+                                    taskIds.forEach(id => allIds.add(id));
+                                    relations.push(...taskLinks.workItemRelations);
+                                }
+                            }
                         }
                     }
                 }

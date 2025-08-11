@@ -15,6 +15,7 @@
         .feature-card { width: 200px; height: 200px; background-color: #e9d5ff; border: 8px solid #a855f7; }
         .initiative-card { width: 350px; height: 350px; background-color: #d1fae5; border: 12px solid #10b981; }
         .user-story-card { width: 100px; height: 100px; background-color: #e0f2fe; border: 4px solid #0ea5e9; }
+        .task-card { width: 80px; height: 80px; background-color: #fffacd; border: 4px solid #daa520; }
         @keyframes border-pulse {
             0% { box-shadow: 0 0 0 0 currentColor; }
             50% { box-shadow: 0 0 0 11px rgba(0, 0, 0, 0.2); }
@@ -73,23 +74,28 @@
     <div id="stars-container"></div>
     <div id="app">
         
-        <div style="position: absolute; top: 1rem; left: 1rem; z-index: 10;">
-            <h1 style="font-size: 1.875rem; font-weight: bold; color: white;">ADO Initiative Explorer</h1>
-            <p style="color: #9ca3af;">Enter an Initiative ID to visualise the hierarchy.</p>
-            <div style="margin-top: 1rem;">
-                <input type="text" id="epicIdInput" style="background-color: #1f2937; color: white; border: 1px solid #4b5563; border-radius: 0.375rem; padding: 0.5rem; width: 24rem;" placeholder="E.g. 4000674...">
+        <div id="ui-controls">
+            <div style="position: absolute; top: 1rem; left: 1rem; z-index: 10;">
+                <h1 style="font-size: 1.875rem; font-weight: bold; color: white;">ADO Initiative Explorer</h1>
+                <p style="color: #9ca3af;">Enter an Initiative ID to visualise the hierarchy.</p>
+                <div style="margin-top: 1rem;">
+                    <input type="text" id="epicIdInput" style="background-color: #1f2937; color: white; border: 1px solid #4b5563; border-radius: 0.375rem; padding: 0.5rem; width: 24rem;" placeholder="E.g. 4000674...">
+                </div>
+                <p id="loading" style="color: #facc15; margin-top: 0.5rem; display: none;">Loading...</p>
+                <p id="error" style="color: #ef4444; margin-top: 0.5rem;"></p>
             </div>
-            <p id="loading" style="color: #facc15; margin-top: 0.5rem; display: none;">Loading...</p>
-            <p id="error" style="color: #ef4444; margin-top: 0.5rem;"></p>
+            <div style="position: absolute; z-index: 10; top: 60px; left: 520px;">
+                <button id="visualiseButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Display Initiative</button>
+            </div>
+            <div style="position: absolute; z-index: 10; top: 110px; left: 520px;">
+                <button id="resetButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Reset Positions</button>
+            </div>
+            <div style="position: absolute; z-index: 10; top: 160px; left: 520px;">
+                <button id="clearButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Clear</button>
+            </div>
         </div>
-        <div style="position: absolute; z-index: 10; top: 60px; left: 520px;">
-            <button id="visualiseButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Display Initiative</button>
-        </div>
-        <div style="position: absolute; z-index: 10; top: 110px; left: 520px;">
-            <button id="resetButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Reset Positions</button>
-        </div>
-        <div style="position: absolute; z-index: 10; top: 160px; left: 520px;">
-            <button id="clearButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Clear</button>
+        <div style="position: absolute; top: 1rem; right: 1rem; z-index: 10;">
+            <button id="hideUiButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Hide UI</button>
         </div>
         <svg id="svgCanvas" style="position: absolute; top: 0; left: 0; z-index: -1;"></svg>
     </div>
@@ -98,6 +104,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             const app = document.getElementById('app');
             const epicIdInput = document.getElementById('epicIdInput');
+            const bubbleSound = new Audio('sounds/mixkit-bubble-pop-up-alert-notification-2357.wav'); // Load sound effect
             const visualiseButton = document.getElementById('visualiseButton');
             const resetButton = document.getElementById('resetButton');
             const clearButton = document.getElementById('clearButton');
@@ -137,6 +144,7 @@
                 if (type === 'Epic') return 300;
                 if (type === 'Feature') return 200;
                 if (type === 'User Story') return 100;
+                if (type === 'Task') return 80; // Added for Task
                 if (type === 'Initiative') return 350;
                 return 100;
             }
@@ -146,6 +154,7 @@
                 console.log('Feature ID:', featureId);
                 console.log('All work items:', allWorkItems);
                 clearVisualization(false);
+                bubbleSound.play(); // Play sound effect
                 await new Promise(resolve => setTimeout(resolve, 500)); // Wait for fade-out
                 const itemsById = new Map(allWorkItems.map(item => [item.Id, item]));
                 const feature = itemsById.get(featureId);
@@ -181,10 +190,55 @@
                 renderWorkItems(itemsToRender);
                 updateLines(itemsToRender);
                 currentView = 'feature';
+                currentFeatureHierarchy = feature; // Store this Feature hierarchy
+            };
+
+            const layoutUserStoryView = async (userStoryId) => {
+                console.log('--- Layout User Story View ---');
+                console.log('User Story ID:', userStoryId);
+                console.log('All work items:', allWorkItems);
+                clearVisualization(false);
+                bubbleSound.play(); // Play sound effect
+                await new Promise(resolve => setTimeout(resolve, 500)); // Wait for fade-out
+                const itemsById = new Map(allWorkItems.map(item => [item.Id, item]));
+                const userStory = itemsById.get(userStoryId);
+                console.log('User Story:', userStory);
+                if (!userStory) {
+                    console.error('User Story not found!');
+                    return;
+                }
+                const tasks = userStory.children.map(child => itemsById.get(child.Id));
+                console.log('Tasks:', tasks);
+
+                const centerX = window.innerWidth / 2;
+                const centerY = 678;
+
+                const outerSize = 80; // Task size
+                const centerSize = Math.round(outerSize * 1.41); // User Story size - Recalculated
+
+                userStory.displaySize = centerSize;
+                tasks.forEach(task => task.displaySize = outerSize);
+
+                userStory.x = centerX - centerSize / 2;
+                userStory.y = centerY - centerSize / 2;
+
+                const taskOrbitRadius = 200; // Smaller radius for tasks
+                tasks.forEach((task, index) => {
+                    const angle = (2 * Math.PI / tasks.length) * index;
+                    task.x = userStory.x + centerSize / 2 - outerSize / 2 + taskOrbitRadius * Math.cos(angle);
+                    task.y = userStory.y + centerSize / 2 - outerSize / 2 + taskOrbitRadius * Math.sin(angle);
+                });
+
+                const itemsToRender = [userStory, ...tasks];
+                currentlyRenderedItems = itemsToRender;
+                renderWorkItems(itemsToRender);
+                updateLines(itemsToRender);
+                currentView = 'userstory';
             };
 
             let originalHierarchy = null;
             let currentEpicHierarchy = null;
+            let currentFeatureHierarchy = null; // Added for User Story to Feature zoom out
 
             const fetchHierarchy = async () => {
                 if (!epicIdInput.value) return;
@@ -236,6 +290,7 @@
 
             const layoutHierarchy = async (hierarchy) => {
                 clearVisualization(false);
+                bubbleSound.play(); // Play sound effect
                 await new Promise(resolve => setTimeout(resolve, 500)); // Wait for fade-out
                 allWorkItems = flattenHierarchy(hierarchy);
 
@@ -342,19 +397,21 @@
                     card.style.animationDelay = `${item.wobbleDelay}s`; // Apply the random delay
 
                     card.innerHTML = `
-                        <div style="font-size: ${item.WorkItemType === 'Initiative' ? '1.76rem' : '0.875rem'}; ${item.WorkItemType === 'Feature' ? 'padding: 10px;' : ''} display: flex; flex-direction: column; justify-content: center; flex-grow: 1; line-height: 1.2;">
-                            <div style="font-weight: bold; font-size: ${item.WorkItemType === 'Initiative' ? '2.21rem' : item.WorkItemType === 'Epic' ? '1.25rem' : '1.1rem'}; text-align: center;">${item.Id}</div>
+                        <div style="font-size: ${item.WorkItemType === 'Initiative' ? '1.76rem' : item.WorkItemType === 'Task' ? '0.7rem' : '0.875rem'}; ${item.WorkItemType === 'Feature' ? 'padding: 10px;' : ''} display: flex; flex-direction: column; justify-content: center; flex-grow: 1; line-height: 1.2;">
+                            <div style="font-weight: bold; font-size: ${item.WorkItemType === 'Initiative' ? '2.21rem' : item.WorkItemType === 'Epic' ? '1.25rem' : item.WorkItemType === 'Task' ? '0.8rem' : '1.1rem'}; text-align: center;">${item.Id}</div>
                             <p style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; margin: 0; padding: 0;">${item.Name.substring(0, 15)}...</p>
                             ${item.WorkItemType === 'User Story' ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Story Points:</strong> ${item.StoryPoints || 0}</p>` : ''}
                             ${item.WorkItemType === 'Feature' && item.Effort > 0 ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Effort:</strong> ${item.Effort}</p>` : ''}
-                            ${item.WorkItemType !== 'User Story' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.State || 'N/A'}</p>` : ''}
-                            ${item.WorkItemType !== 'User Story' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.TShirtSize || 'N/A'}</p>` : ''}
+                            ${item.WorkItemType !== 'User Story' && item.WorkItemType !== 'Task' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.State || 'N/A'}</p>` : ''}
+                            ${item.WorkItemType !== 'User Story' && item.WorkItemType !== 'Task' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.TShirtSize || 'N/A'}</p>` : ''}
                             ${item.WorkItemType === 'Feature' && item.totalStoryPoints > 0 ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Story Point Total:</strong> ${item.totalStoryPoints}</p>` : ''}
                             ${item.WorkItemType === 'Epic' && item.Effort > 0 ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Epic Effort:</strong> ${item.Effort}</p>` : ''}
                         </div>
                     `;
 
-                    card.addEventListener('mousedown', (e) => startDrag(e, item));
+                    if (item.WorkItemType !== 'Task') { // Tasks are not draggable
+                        card.addEventListener('mousedown', (e) => startDrag(e, item));
+                    }
                     app.appendChild(card);
 
                     // Trigger fade-in
@@ -493,6 +550,13 @@
                             });
                             clearVisualization(false);
                             await layoutHierarchy(currentEpicHierarchy);
+                        } else if (currentView === 'userstory') {
+                            // Zoom out from User Story to Feature view
+                            currentlyRenderedItems.forEach(item => {
+                                delete item.displaySize;
+                            });
+                            clearVisualization(false);
+                            await layoutFeatureView(currentFeatureHierarchy.Id); // Pass the ID to re-layout the feature view
                         } else if (currentView === 'epic') {
                             // Zoom out from Epic to Initiative view
                             currentlyRenderedItems.forEach(item => {
@@ -510,6 +574,8 @@
                             await layoutHierarchy(clickedItem);
                         } else if (currentView === 'epic' && clickedItem.WorkItemType === 'Feature') {
                             await layoutFeatureView(clickedItem.Id);
+                        } else if (currentView === 'feature' && clickedItem.WorkItemType === 'User Story') {
+                            await layoutUserStoryView(clickedItem.Id);
                         }
                     }
                 }
@@ -525,6 +591,19 @@
             });
             resetButton.addEventListener('click', resetPositions);
             clearButton.addEventListener('click', clearVisualization);
+
+            const hideUiButton = document.getElementById('hideUiButton');
+            const uiControls = document.getElementById('ui-controls');
+
+            hideUiButton.addEventListener('click', () => {
+                if (uiControls.style.display === 'none') {
+                    uiControls.style.display = 'block';
+                    hideUiButton.textContent = 'Hide UI';
+                } else {
+                    uiControls.style.display = 'none';
+                    hideUiButton.textContent = 'Show UI';
+                }
+            });
         });
     </script>
     <script>
