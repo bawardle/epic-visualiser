@@ -473,7 +473,7 @@
                                 const epicMaxWeeks = getMaxWeeksFromTShirtSize(parent.TShirtSize);
                                 const featureMaxWeeks = getMaxWeeksFromTShirtSize(childItem.TShirtSize);
 
-                                const isFlashingRed = (parent.WorkItemType === 'Epic' && childItem.WorkItemType === 'Feature' && childItem.totalStoryPoints > parent.Effort);
+                                const isFlashingRed = (parent.WorkItemType === 'Epic' && childItem.WorkItemType === 'Feature' && (childItem.totalStoryPoints / 13) > parent.Effort);
 
                                 if (isFlashingRed) {
                                     line.style.animation = 'flash-red 2s infinite alternate'; // Slow and subtle
