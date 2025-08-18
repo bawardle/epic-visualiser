@@ -418,6 +418,7 @@
                         card.style.animation += `, wobble 4.375s infinite alternate ${item.wobbleDelay}s`;
                     }
 
+                    card.title = item.Name;
                     card.innerHTML = `
                         <div style="font-size: ${item.WorkItemType === 'Initiative' ? '1.76rem' : item.WorkItemType === 'Task' ? '0.7rem' : '0.875rem'}; ${item.WorkItemType === 'Feature' ? 'padding: 10px;' : ''} display: flex; flex-direction: column; justify-content: center; flex-grow: 1; line-height: 1.2;">
                             <div style="font-weight: bold; font-size: ${item.WorkItemType === 'Initiative' ? '2.21rem' : item.WorkItemType === 'Epic' ? '1.25rem' : item.WorkItemType === 'Task' ? '0.8rem' : '1.1rem'}; text-align: center;">${item.Id}</div>
@@ -427,7 +428,10 @@
                             ${item.WorkItemType !== 'User Story' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.State || 'N/A'}</p>` : ''}
                             ${item.WorkItemType !== 'User Story' && item.WorkItemType !== 'Task' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.TShirtSize || 'N/A'}</p>` : ''}
                             ${item.WorkItemType === 'Feature' && item.totalStoryPoints > 0 ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Estimate Total:</strong> ${item.totalStoryPoints}</p>` : ''}
+                            ${item.WorkItemType === 'Feature' && item.devCompletePercentage !== undefined ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Dev Complete %age:</strong><br>${item.devCompletePercentage.toFixed(2)}%</p>` : ''}
                             ${item.WorkItemType === 'Epic' ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Epic Effort:</strong> ${item.Effort > 0 ? item.Effort : 'TBD'}</p>` : ''}
+                            ${item.WorkItemType === 'Epic' && item.devCompletePercentage !== undefined ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Dev Complete:</strong><br>${item.devCompletePercentage.toFixed(2)}%</p>` : ''}
+                            ${item.WorkItemType === 'Initiative' && item.devCompletePercentage !== undefined ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Dev Complete:</strong><br>${item.devCompletePercentage.toFixed(2)}%</p>` : ''}
                         </div>
                     `;
 

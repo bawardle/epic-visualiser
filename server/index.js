@@ -125,6 +125,38 @@ app.post("/api/initiativehierarchy", async (req, res) => {
         });
 
         const root = workItemsMap.get(initiativeWorkItem.id);
+
+        // Calculate and add Dev Complete percentage to Features, Epics, and Initiative
+        if (root && root.children) {
+            let totalInitiativeStoryPoints = 0;
+            let completedInitiativeStoryPoints = 0;
+            root.children.forEach(epic => {
+                let totalEpicStoryPoints = 0;
+                let completedEpicStoryPoints = 0;
+                if (epic.children) {
+                    epic.children.forEach(feature => {
+                        let totalFeatureStoryPoints = 0;
+                        let completedFeatureStoryPoints = 0;
+                        if (feature.children) {
+                            feature.children.forEach(story => {
+                                totalFeatureStoryPoints += story.StoryPoints;
+                                if (story.State === 'Ready for Test' || story.State === 'Closed') {
+                                    completedFeatureStoryPoints += story.StoryPoints;
+                                }
+                            });
+                        }
+                        feature.devCompletePercentage = totalFeatureStoryPoints > 0 ? (completedFeatureStoryPoints / totalFeatureStoryPoints) * 100 : 0;
+                        totalEpicStoryPoints += totalFeatureStoryPoints;
+                        completedEpicStoryPoints += completedFeatureStoryPoints;
+                    });
+                }
+                epic.devCompletePercentage = totalEpicStoryPoints > 0 ? (completedEpicStoryPoints / totalEpicStoryPoints) * 100 : 0;
+                totalInitiativeStoryPoints += totalEpicStoryPoints;
+                completedInitiativeStoryPoints += completedEpicStoryPoints;
+            });
+            root.devCompletePercentage = totalInitiativeStoryPoints > 0 ? (completedInitiativeStoryPoints / totalInitiativeStoryPoints) * 100 : 0;
+        }
+
         if (root) {
             res.json(root);
         } else {
