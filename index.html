@@ -93,6 +93,10 @@
             <div style="position: absolute; z-index: 10; top: 60px; left: 520px;">
                 <button id="visualiseButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Display Initiative</button>
             </div>
+            <div style="position: absolute; z-index: 10; top: 70px; left: 680px; display: flex; align-items: center;">
+                <input type="checkbox" id="enableDraggingCheckbox" style="margin-right: 0.5rem;">
+                <label for="enableDraggingCheckbox" style="color: #bbbbbb;">Enable Dragging</label>
+            </div>
             <div style="position: absolute; z-index: 10; top: 110px; left: 520px;">
                 <button id="resetButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Reset Positions</button>
             </div>
@@ -129,9 +133,19 @@
             let draggedItem = null;
             let offsetX = 0;
             let offsetY = 0;
+            let startX = 0;
+            let startY = 0;
             let isDragging = false;
             let currentlyRenderedItems = [];
             let currentView = 'epic';
+            let isDraggingEnabled = false; // New variable for dragging state
+
+            const enableDraggingCheckbox = document.getElementById('enableDraggingCheckbox');
+            enableDraggingCheckbox.addEventListener('change', () => {
+                isDraggingEnabled = enableDraggingCheckbox.checked;
+                // Re-render items to apply drag/no-drag state
+                renderWorkItems(currentlyRenderedItems);
+            });
 
             const getMaxWeeksFromTShirtSize = (tshirtSize) => {
                 if (!tshirtSize) return null;
@@ -542,9 +556,13 @@
                 }
             };
 
+            const DRAG_THRESHOLD = 5; // Pixels
+
             const startDrag = (e, item) => {
                 draggedItem = item;
                 isDragging = false; // Assume not dragging initially
+                startX = e.clientX;
+                startY = e.clientY;
                 const card = document.getElementById(`card-${item.Id}`);
                 const rect = card.getBoundingClientRect();
                 offsetX = e.clientX - rect.left;
@@ -555,48 +573,44 @@
 
             const doDrag = (e) => {
                 if (!draggedItem) return;
-                isDragging = true; // If mouse moves, it's a drag
-                draggedItem.x = e.clientX - offsetX;
-                draggedItem.y = e.clientY - offsetY;
-                const card = document.getElementById(`card-${draggedItem.Id}`);
-                card.style.left = `${draggedItem.x}px`;
-                card.style.top = `${draggedItem.y}px`;
-                updateLines(currentlyRenderedItems);
+
+                // Check if movement exceeds threshold to consider it a drag
+                if (Math.abs(e.clientX - startX) > DRAG_THRESHOLD || Math.abs(e.clientY - startY) > DRAG_THRESHOLD) {
+                    isDragging = true;
+                }
+
+                if (isDragging && isDraggingEnabled) { // Only drag if dragging is enabled and threshold met
+                    draggedItem.x = e.clientX - offsetX;
+                    draggedItem.y = e.clientY - offsetY;
+                    const card = document.getElementById(`card-${draggedItem.Id}`);
+                    card.style.left = `${draggedItem.x}px`;
+                    card.style.top = `${draggedItem.y}px`;
+                    updateLines(currentlyRenderedItems);
+                }
             };
 
             const stopDrag = async (e) => {
                 document.removeEventListener('mousemove', doDrag);
                 document.removeEventListener('mouseup', stopDrag);
 
-                if (!isDragging && draggedItem) {
-                    // It was a click, not a drag
+                if (!isDragging && draggedItem) { // It was a click, not a drag
                     const clickedItem = draggedItem;
 
                     if (clickedItem.Id === currentlyRenderedItems[0].Id) {
                         // Clicked the central item (zoom out)
                         if (currentView === 'feature') {
-                            // Zoom out from Feature to Epic view
-                            currentlyRenderedItems.forEach(item => {
-                                delete item.displaySize;
-                            });
+                            currentlyRenderedItems.forEach(item => { delete item.displaySize; });
                             clearVisualization(false);
                             await layoutHierarchy(currentEpicHierarchy);
                         } else if (currentView === 'userstory') {
-                            // Zoom out from User Story to Feature view
-                            currentlyRenderedItems.forEach(item => {
-                                delete item.displaySize;
-                            });
+                            currentlyRenderedItems.forEach(item => { delete item.displaySize; });
                             clearVisualization(false);
-                            await layoutFeatureView(currentFeatureHierarchy.Id); // Pass the ID to re-layout the feature view
+                            await layoutFeatureView(currentFeatureHierarchy.Id);
                         } else if (currentView === 'epic') {
-                            // Zoom out from Epic to Initiative view
-                            currentlyRenderedItems.forEach(item => {
-                                delete item.displaySize;
-                            });
+                            currentlyRenderedItems.forEach(item => { delete item.displaySize; });
                             clearVisualization(false);
                             await layoutHierarchy(originalHierarchy);
                         } else if (currentView === 'initiative') {
-                            // Already at top level, do nothing or provide feedback
                             console.log('Already at Initiative level, cannot zoom out further.');
                         }
                     } else {
