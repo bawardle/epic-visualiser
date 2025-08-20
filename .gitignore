@@ -1,9 +1,16 @@
-# .gitignore
+# Node.js dependencies - should be installed, not committed
+node_modules/
+api/node_modules/
 
-# Ignore the server directory
-# Paths in .gitignore are relative to the root of the repository.
-# Use forward slashes (/) for cross-platform compatibility.
+# Local settings and secrets - VERY IMPORTANT
+api/local.settings.json
+
+# Environment files
 .env
-/.vs/
-/server/node_modules/
-/server/server_debug.log
+
+# Log files
+*.log
+
+# Visual Studio / VS Code folder
+.vs/
+.vscode/

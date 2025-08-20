@@ -1,0 +1,8 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "description": "Azure Functions for the Epic Visualiser",
+  "dependencies": {
+    "azure-devops-node-api": "^12.0.0"
+  }
+}
