@@ -6,3 +6,4 @@
 .env
 /.vs/
 /server/node_modules/
+/server/server_debug.log
