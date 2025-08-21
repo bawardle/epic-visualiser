@@ -77,6 +77,11 @@
     </style>
 </head>
 <body>
+    <script>
+        // This will be replaced by Azure Static Web Apps during deployment
+        // For local development, you can set it here or via a local server setup
+        window.API_URL = ''; // Default to empty string for relative paths or set your local API URL
+    </script>
     <div id="stars-container"></div>
     <div id="app">
         
@@ -266,7 +271,7 @@
                 error.textContent = '';
 
                 try {
-                    const response = await fetch('http://localhost:3000/api/initiativehierarchy', {
+                    fetch(`${process.env.REACT_APP_API_URL}/api/InitiativeHierarchy`)
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ initiativeId: epicIdInput.value })
