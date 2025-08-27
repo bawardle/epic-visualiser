@@ -17,11 +17,30 @@ async function getWorkItemsInBatches(witApi, ids) {
 }
 
 module.exports = async function (context, req) {
+    // Handle OPTIONS preflight request
+    if (req.method === 'OPTIONS') {
+        context.res = {
+            status: 200,
+            headers: {
+                'Access-Control-Allow-Origin': 'https://adoexplorerapp-bddsbnaxc7asb0e7.uksouth-01.azurewebsites.net',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type'
+            },
+            body: ""
+        };
+        return;
+    }
+
     const { initiativeId } = req.body;
     if (!initiativeId) {
         context.res = {
             status: 400,
-            body: { error: "Invalid request body. 'initiativeId' is required." }
+            body: { error: "Invalid request body. 'initiativeId' is required." },
+            headers: {
+                'Access-Control-Allow-Origin': 'https://adoexplorerapp-bddsbnaxc7asb0e7.uksouth-01.azurewebsites.net',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type'
+            }
         };
         return;
     }
@@ -37,7 +56,12 @@ module.exports = async function (context, req) {
         if (!initiativeWorkItem) {
             context.res = {
                 status: 404,
-                body: { error: `Initiative with ID '${initiativeId}' not found.` }
+                body: { error: `Initiative with ID '${initiativeId}' not found.` },
+                headers: {
+                    'Access-Control-Allow-Origin': 'https://adoexplorerapp-bddsbnaxc7asb0e7.uksouth-01.azurewebsites.net',
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type'
+                }
             };
             return;
         }
@@ -137,7 +161,12 @@ module.exports = async function (context, req) {
         if (root) {
             context.res = {
                 status: 200,
-                body: root
+                body: root,
+                headers: {
+                    'Access-Control-Allow-Origin': 'https://adoexplorerapp-bddsbnaxc7asb0e7.uksouth-01.azurewebsites.net',
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type'
+                }
             };
         } else {
             context.res = {
@@ -150,7 +179,12 @@ module.exports = async function (context, req) {
         context.log.error(error); // Use context.log for logging in Azure Functions
         context.res = {
             status: 500,
-            body: { error: "Failed to fetch initiative hierarchy from Azure DevOps." }
+            body: { error: "Failed to fetch initiative hierarchy from Azure DevOps." },
+            headers: {
+                'Access-Control-Allow-Origin': 'https://adoexplorerapp-bddsbnaxc7asb0e7.uksouth-01.azurewebsites.net',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type'
+            }
         };
     }
 };
