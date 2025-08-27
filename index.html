@@ -119,6 +119,10 @@
                 <input type="checkbox" id="enableDraggingCheckbox" style="margin-right: 0.5rem;">
                 <label for="enableDraggingCheckbox" style="color: #bbbbbb;">Enable Dragging</label>
             </div>
+            <div style="position: absolute; z-index: 10; top: 90px; left: 680px; display: flex; align-items: center;">
+                <input type="checkbox" id="disableAudioCheckbox" style="margin-right: 0.5rem;">
+                <label for="disableAudioCheckbox" style="color: #bbbbbb;">Disable Audio</label>
+            </div>
             <div style="position: absolute; z-index: 10; top: 110px; left: 520px;">
                 <button id="resetButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Reset Positions</button>
             </div>
@@ -178,12 +182,18 @@
             let currentlyRenderedItems = [];
             let currentView = 'epic';
             let isDraggingEnabled = false; // New variable for dragging state
+            let isAudioDisabled = false;
 
             const enableDraggingCheckbox = document.getElementById('enableDraggingCheckbox');
             enableDraggingCheckbox.addEventListener('change', () => {
                 isDraggingEnabled = enableDraggingCheckbox.checked;
                 // Re-render items to apply drag/no-drag state
                 renderWorkItems(currentlyRenderedItems);
+            });
+
+            const disableAudioCheckbox = document.getElementById('disableAudioCheckbox');
+            disableAudioCheckbox.addEventListener('change', () => {
+                isAudioDisabled = disableAudioCheckbox.checked;
             });
 
             const getMaxWeeksFromTShirtSize = (tshirtSize) => {
@@ -213,7 +223,9 @@
                 console.log('Feature ID:', featureId);
                 console.log('All work items:', allWorkItems);
                 clearVisualization(false);
-                bubbleSound.play(); // Play sound effect
+                if (!isAudioDisabled) {
+                    bubbleSound.play(); // Play sound effect
+                }
                 await new Promise(resolve => setTimeout(resolve, 500)); // Wait for fade-out
                 const itemsById = new Map(allWorkItems.map(item => [item.Id, item]));
                 const feature = itemsById.get(featureId);
@@ -257,7 +269,9 @@
                 console.log('User Story ID:', userStoryId);
                 console.log('All work items:', allWorkItems);
                 clearVisualization(false);
-                bubbleSound.play(); // Play sound effect
+                if (!isAudioDisabled) {
+                    bubbleSound.play(); // Play sound effect
+                }
                 await new Promise(resolve => setTimeout(resolve, 500)); // Wait for fade-out
                 const itemsById = new Map(allWorkItems.map(item => [item.Id, item]));
                 const userStory = itemsById.get(userStoryId);
@@ -351,7 +365,9 @@
 
             const layoutHierarchy = async (hierarchy) => {
                 clearVisualization(false);
-                bubbleSound.play(); // Play sound effect
+                if (!isAudioDisabled) {
+                    bubbleSound.play(); // Play sound effect
+                }
                 await new Promise(resolve => setTimeout(resolve, 500)); // Wait for fade-out
                 allWorkItems = flattenHierarchy(hierarchy);
 
