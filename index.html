@@ -123,6 +123,10 @@
                 <input type="checkbox" id="disableAudioCheckbox" style="margin-right: 0.5rem;">
                 <label for="disableAudioCheckbox" style="color: #bbbbbb;">Disable Audio</label>
             </div>
+            <div style="position: absolute; z-index: 10; top: 110px; left: 680px; display: flex; align-items: center;">
+                <label for="developerWeekAsStoryPoints" style="color: #bbbbbb; margin-right: 0.5rem;">Developer Week as Story Points:</label>
+                <input type="number" id="developerWeekAsStoryPoints" placeholder="default override 8" style="background-color: #1f2937; color: white; border: 1px solid #4b5563; border-radius: 0.375rem; padding: 0.25rem; width: 8rem;">
+            </div>
             <div style="position: absolute; z-index: 10; top: 110px; left: 520px;">
                 <button id="resetButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Reset Positions</button>
             </div>
@@ -192,6 +196,7 @@
             });
 
             const disableAudioCheckbox = document.getElementById('disableAudioCheckbox');
+            const developerWeekAsStoryPointsInput = document.getElementById('developerWeekAsStoryPoints');
             disableAudioCheckbox.addEventListener('change', () => {
                 isAudioDisabled = disableAudioCheckbox.checked;
             });
@@ -211,7 +216,7 @@
 
             const getCardSize = (type) => {
                 if (type === 'Epic') return 300;
-                if (type === 'Feature') return 200;
+                if (type === 'Feature') return 220;
                 if (type === 'User Story') return 100;
                 if (type === 'Task') return 80; // Added for Task
                 if (type === 'Initiative') return 350;
@@ -377,6 +382,27 @@
 
                 const itemsById = new Map(allWorkItems.map(item => [item.Id, item]));
 
+                // Calculate total story points and estimated effort for all work items
+                // Iterate in reverse to ensure children's story points are calculated first
+                for (let i = allWorkItems.length - 1; i >= 0; i--) {
+                    const item = allWorkItems[i];
+                    if (item.children && item.children.length > 0) {
+                        item.totalStoryPoints = item.children.reduce((total, child) => {
+                            const childItem = itemsById.get(child.Id);
+                            return total + (childItem && childItem.StoryPoints ? childItem.StoryPoints : 0) + (childItem && childItem.totalStoryPoints ? childItem.totalStoryPoints : 0);
+                        }, 0);
+                    } else {
+                        // If no children, totalStoryPoints is just its own StoryPoints
+                        item.totalStoryPoints = item.StoryPoints || 0;
+                    }
+
+                    // Calculate Effort for Epics, Initiatives, and Features
+                    if (item.WorkItemType === 'Epic' || item.WorkItemType === 'Initiative' || item.WorkItemType === 'Feature') {
+                        const developerWeekAsStoryPoints = parseFloat(developerWeekAsStoryPointsInput.value) || 8;
+                        item.Effort = (item.totalStoryPoints / developerWeekAsStoryPoints).toFixed(1);
+                    }
+                }
+
                 const centerX = window.innerWidth / 2;
                 const centerY = 678;
 
@@ -392,7 +418,7 @@
 
                     const outerSize = 210;
                     const centerSize = Math.round(outerSize * 1.41);
-                    
+
                     centralItem.displaySize = centerSize;
                     orbitingItems.forEach(epic => epic.displaySize = outerSize);
 
@@ -409,23 +435,10 @@
 
                     centralItem.displaySize = centerSize;
                     orbitingItems.forEach(feature => feature.displaySize = outerSize);
-                    
+
                     centralItem.x = centerX - centerSize / 2;
                     centralItem.y = centerY - centerSize / 2;
                     currentEpicHierarchy = hierarchy; // Store this Epic hierarchy
-                }
-
-                // Calculate total story points for each feature (if applicable)
-                if (hierarchy.WorkItemType === 'Epic') {
-                    orbitingItems.forEach(featureNode => {
-                        const feature = itemsById.get(featureNode.Id);
-                        if (feature && feature.children) {
-                            feature.totalStoryPoints = feature.children.reduce((total, child) => {
-                                const childItem = allWorkItems.find(i => i.Id === child.Id);
-                                return total + (childItem && childItem.StoryPoints ? childItem.StoryPoints : 0);
-                            }, 0);
-                        }
-                    });
                 }
 
                 // Position orbiting items
@@ -495,12 +508,13 @@
                             <div style="font-weight: bold; font-size: ${item.WorkItemType === 'Initiative' ? '1.768rem' : item.WorkItemType === 'Epic' ? '1.25rem' : item.WorkItemType === 'Task' ? '0.8rem' : '1.1rem'}; text-align: center;">${item.Id}</div>
                             <p style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; margin: 0; padding: 0;">${item.WorkItemType === 'Task' ? item.Name.substring(0, 8) : item.Name.substring(0, 15)}...</p>
                             ${item.WorkItemType === 'User Story' ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Estimate:</strong> ${item.StoryPoints || 0}</p><p style="text-align: center; margin: 0; padding: 0;">${item.State || 'N/A'}</p>` : ''}
-                            ${item.WorkItemType === 'Feature' && item.Effort > 0 ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Effort:</strong> ${item.Effort}</p>` : ''}
+                            
                             ${item.WorkItemType !== 'User Story' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.State || 'N/A'}</p>` : ''}
                             ${item.WorkItemType === 'Epic' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.TShirtSize || 'No Size Given'}</p>` : item.WorkItemType !== 'User Story' && item.WorkItemType !== 'Task' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.TShirtSize || 'N/A'}</p>` : ''}
+                            ${item.WorkItemType === 'Feature' && item.Effort > 0 ? `<p style="text-align: center; margin: 0; padding: 0;">${item.Effort} Estimated Weeks</p>` : ''}
                             ${item.WorkItemType === 'Feature' && item.totalStoryPoints > 0 ? `<p style="text-align: center; margin: 0; padding: 0;">${item.totalStoryPoints} Story Points</p>` : ''}
                             ${item.WorkItemType === 'Feature' && item.devCompletePercentage !== undefined ? `<p style="text-align: center; margin: 0; padding: 0;">${item.devCompletePercentage.toFixed(0)}% Dev Complete</p>` : ''}
-                            ${item.WorkItemType === 'Epic' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.Effort > 0 ? item.Effort : 'TBD'} Estimated Weeks</p>` : ''}
+                            ${(item.WorkItemType === 'Epic' || item.WorkItemType === 'Initiative') ? `<p style="text-align: center; margin: 0; padding: 0;">${item.Effort > 0 ? item.Effort : 'TBD'} Estimated Weeks</p>` : ''}
                             ${item.WorkItemType === 'Epic' && item.devCompletePercentage !== undefined ? `<p style="text-align: center; margin: 0; padding: 0;">${item.devCompletePercentage.toFixed(0)}% Dev Complete</p>` : ''}
                             ${item.WorkItemType === 'Initiative' && item.devCompletePercentage !== undefined ? `<p style="text-align: center; margin: 0; padding: 0;">${item.devCompletePercentage.toFixed(0)}% Dev Complete</p>` : ''}
                         </div>
@@ -548,7 +562,7 @@
                                 const epicMaxWeeks = getMaxWeeksFromTShirtSize(parent.TShirtSize);
                                 const featureMaxWeeks = getMaxWeeksFromTShirtSize(childItem.TShirtSize);
 
-                                const isFlashingRed = (parent.WorkItemType === 'Epic' && childItem.WorkItemType === 'Feature' && (childItem.totalStoryPoints / 13) > parent.Effort);
+                                const isFlashingRed = (parent.WorkItemType === 'Epic' && childItem.WorkItemType === 'Feature' && (childItem.totalStoryPoints / (developerWeekAsStoryPointsInput.value || 13)) > parent.Effort);
 
                                 if (isFlashingRed) {
                                     line.style.animation = 'flash-red 2s infinite alternate'; // Slow and subtle
