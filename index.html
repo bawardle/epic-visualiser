@@ -133,6 +133,9 @@
             <div style="position: absolute; z-index: 10; top: 160px; left: 520px;">
                 <button id="clearButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Clear</button>
             </div>
+            <div style="position: absolute; z-index: 10; top: 160px; left: 620px;">
+                <button id="exportCsvButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Export to CSV</button>
+            </div>
         </div>
         <div style="position: absolute; top: 1rem; right: 1rem; z-index: 10;">
             <button id="hideUiButton" style="background-color: #222222; color: #bbbbbb; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #555555;">Hide UI</button>
@@ -389,7 +392,7 @@
                     if (item.children && item.children.length > 0) {
                         item.totalStoryPoints = item.children.reduce((total, child) => {
                             const childItem = itemsById.get(child.Id);
-                            return total + (childItem && childItem.StoryPoints ? childItem.StoryPoints : 0) + (childItem && childItem.totalStoryPoints ? childItem.totalStoryPoints : 0);
+                            return total + (childItem && childItem.totalStoryPoints ? childItem.totalStoryPoints : (childItem && childItem.StoryPoints ? childItem.StoryPoints : 0));
                         }, 0);
                     } else {
                         // If no children, totalStoryPoints is just its own StoryPoints
@@ -399,7 +402,7 @@
                     // Calculate Effort for Epics, Initiatives, and Features
                     if (item.WorkItemType === 'Epic' || item.WorkItemType === 'Initiative' || item.WorkItemType === 'Feature') {
                         const developerWeekAsStoryPoints = parseFloat(developerWeekAsStoryPointsInput.value) || 8;
-                        item.Effort = (item.totalStoryPoints / developerWeekAsStoryPoints).toFixed(1);
+                        item.Effort = Math.round(item.totalStoryPoints / developerWeekAsStoryPoints);
                     }
                 }
 
@@ -507,14 +510,14 @@
                         <div style="font-size: ${item.WorkItemType === 'Initiative' ? '1.408rem' : item.WorkItemType === 'Task' ? '0.7rem' : '0.875rem'}; ${item.WorkItemType === 'Feature' ? 'padding: 10px;' : ''} display: flex; flex-direction: column; justify-content: center; flex-grow: 1; line-height: 1.2;">
                             <div style="font-weight: bold; font-size: ${item.WorkItemType === 'Initiative' ? '1.768rem' : item.WorkItemType === 'Epic' ? '1.25rem' : item.WorkItemType === 'Task' ? '0.8rem' : '1.1rem'}; text-align: center;">${item.Id}</div>
                             <p style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; margin: 0; padding: 0;">${item.WorkItemType === 'Task' ? item.Name.substring(0, 8) : item.Name.substring(0, 15)}...</p>
-                            ${item.WorkItemType === 'User Story' ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Estimate:</strong> ${item.StoryPoints || 0}</p><p style="text-align: center; margin: 0; padding: 0;">${item.State || 'N/A'}</p>` : ''}
+                            ${item.WorkItemType === 'User Story' ? `<p style="text-align: center; margin: 0; padding: 0;"><strong>Estimate:</strong> ${item.StoryPoints || 0}</p><p style="text-align: center; margin: 0; padding: 0; font-size: 0.7rem;">${item.State === 'Ready For Development' ? 'Ready<br>For<br>Development' : item.State || 'N/A'}</p>` : ''}
                             
                             ${item.WorkItemType !== 'User Story' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.State || 'N/A'}</p>` : ''}
                             ${item.WorkItemType === 'Epic' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.TShirtSize || 'No Size Given'}</p>` : item.WorkItemType !== 'User Story' && item.WorkItemType !== 'Task' ? `<p style="text-align: center; margin: 0; padding: 0;">${item.TShirtSize || 'N/A'}</p>` : ''}
-                            ${item.WorkItemType === 'Feature' && item.Effort > 0 ? `<p style="text-align: center; margin: 0; padding: 0;">${item.Effort} Estimated Weeks</p>` : ''}
+                            ${item.WorkItemType === 'Feature' && item.Effort > 0 ? `<p style="text-align: center; margin: 0; padding: 0;">${item.Effort} Est. Approx. Weeks</p>` : ''}
                             ${item.WorkItemType === 'Feature' && item.totalStoryPoints > 0 ? `<p style="text-align: center; margin: 0; padding: 0;">${item.totalStoryPoints} Story Points</p>` : ''}
                             ${item.WorkItemType === 'Feature' && item.devCompletePercentage !== undefined ? `<p style="text-align: center; margin: 0; padding: 0;">${item.devCompletePercentage.toFixed(0)}% Dev Complete</p>` : ''}
-                            ${(item.WorkItemType === 'Epic' || item.WorkItemType === 'Initiative') ? `<p style="text-align: center; margin: 0; padding: 0;">${item.Effort > 0 ? item.Effort : 'TBD'} Estimated Weeks</p>` : ''}
+                            ${(item.WorkItemType === 'Epic' || item.WorkItemType === 'Initiative') ? `<p style="text-align: center; margin: 0; padding: 0;">${item.Effort > 0 ? item.Effort : 'TBD'} Est. Approx. Weeks</p>` : ''}
                             ${item.WorkItemType === 'Epic' && item.devCompletePercentage !== undefined ? `<p style="text-align: center; margin: 0; padding: 0;">${item.devCompletePercentage.toFixed(0)}% Dev Complete</p>` : ''}
                             ${item.WorkItemType === 'Initiative' && item.devCompletePercentage !== undefined ? `<p style="text-align: center; margin: 0; padding: 0;">${item.devCompletePercentage.toFixed(0)}% Dev Complete</p>` : ''}
                         </div>
@@ -559,17 +562,14 @@
                                 line.setAttribute('y2', childItem.y + childSize);
                                 line.setAttribute('stroke-width', '6');
 
-                                const epicMaxWeeks = getMaxWeeksFromTShirtSize(parent.TShirtSize);
-                                const featureMaxWeeks = getMaxWeeksFromTShirtSize(childItem.TShirtSize);
-
-                                const isFlashingRed = (parent.WorkItemType === 'Epic' && childItem.WorkItemType === 'Feature' && (childItem.totalStoryPoints / (developerWeekAsStoryPointsInput.value || 13)) > parent.Effort);
+                                const isFlashingRed = (parent.WorkItemType === 'Epic' && childItem.WorkItemType === 'Feature' && parseFloat(childItem.Effort) > parseFloat(parent.Effort));
 
                                 if (isFlashingRed) {
                                     line.style.animation = 'flash-red 2s infinite alternate'; // Slow and subtle
                                     line.setAttribute('stroke', '#F44336'); // Set initial color
-                                } else if (epicMaxWeeks !== null && featureMaxWeeks !== null && featureMaxWeeks < epicMaxWeeks) {
+                                } else if (parent.Effort !== undefined && childItem.Effort !== undefined && parseFloat(childItem.Effort) < parseFloat(parent.Effort)) {
                                     line.setAttribute('stroke', '#ffffff'); // Revert to white
-                                } else if (epicMaxWeeks !== null && featureMaxWeeks !== null && featureMaxWeeks > epicMaxWeeks) {
+                                } else if (parent.Effort !== undefined && childItem.Effort !== undefined && parseFloat(childItem.Effort) > parseFloat(parent.Effort)) {
                                     line.setAttribute('stroke', '#F44336'); // Modern red
                                 } else {
                                     line.setAttribute('stroke', '#ffffff');
@@ -734,37 +734,67 @@
                     hideUiButton.textContent = 'Show UI';
                 }
             });
+
+            const exportCsvButton = document.getElementById('exportCsvButton');
+            exportCsvButton.addEventListener('click', exportToCSV);
+
+            function exportToCSV() {
+                if (allWorkItems.length === 0) {
+                    alert("No data to export.");
+                    return;
+                }
+
+                const itemsToExport = allWorkItems.filter(item => item.WorkItemType !== 'Task');
+
+                if (itemsToExport.length === 0) {
+                    alert("No data to export (excluding tasks).");
+                    return;
+                }
+
+                const headers = ['ID', 'Name', 'WorkItemType', 'State', 'ParentID', 'StoryPoints', 'TShirtSize', 'Effort', 'DevCompletePercentage', 'TotalStoryPoints'];
+                const csvRows = [headers.join(',')];
+
+                itemsToExport.forEach(item => {
+                    let parentId = '';
+                    for (const parent of itemsToExport) {
+                        if (parent.children && parent.children.some(child => child.Id === item.Id)) {
+                            parentId = parent.Id;
+                            break;
+                        }
+                    }
+
+                    const row = [
+                        item.Id,
+                        `"${item.Name.replace(/"/g, '""')}"`,
+                        item.WorkItemType,
+                        item.State,
+                        parentId,
+                        item.StoryPoints || 0,
+                        item.TShirtSize || '',
+                        item.Effort || '',
+                        item.devCompletePercentage !== undefined ? item.devCompletePercentage.toFixed(0) : '',
+                        item.totalStoryPoints || 0
+                    ];
+                    csvRows.push(row.join(','));
+                });
+
+                const csvContent = csvRows.join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                if (link.download !== undefined) {
+                    const initiativeId = document.getElementById('epicIdInput').value || 'NoInitiative';
+                    const date = new Date();
+                    const dateTimeString = `${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}_${date.getHours().toString().padStart(2, '0')}${date.getMinutes().toString().padStart(2, '0')}${date.getSeconds().toString().padStart(2, '0')}`;
+                    const fileName = `AdoExplore_Output_${initiativeId}_${dateTimeString}.csv`;
+
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", fileName);
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            }
         });
     </script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const starsContainer = document.getElementById('stars-container');
-            const numberOfStars = 100; // Adjust as needed for density
-
-            for (let i = 0; i < numberOfStars; i++) {
-                const star = document.createElement('div');
-                star.className = 'star';
-
-                let size;
-            if (Math.random() > 0.9) { // 10% of stars will be larger
-                size = Math.random() * 4 + 4; // Larger stars between 4px and 8px
-            } else {
-                size = Math.random() * 3 + 1; // Star size between 1px and 4px
-            }
-                star.style.width = `${size}px`;
-                star.style.height = `${size}px`;
-
-                const x = Math.random() * 100; // Percentage of width
-                const y = Math.random() * 100; // Percentage of height
-                star.style.left = `${x}%`;
-                star.style.top = `${y}%`;
-
-                star.style.animationDelay = `${Math.random() * 5}s`; // Random delay for twinkling
-                star.style.animationDuration = `${Math.random() * 3 + 2}s`; // Random duration for twinkling
-
-                starsContainer.appendChild(star);
-            }
-        });
-    </script>
-</body>
-</html>
